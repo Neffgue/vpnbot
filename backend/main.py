@@ -96,6 +96,13 @@ else:
 app.include_router(api_router)
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Return empty favicon to suppress 404 errors in browser console."""
+    from fastapi.responses import Response
+    return Response(content=b"", media_type="image/x-icon")
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
