@@ -1,7 +1,11 @@
-"""Script to initialize bot_buttons and bot_texts tables with default data."""
+"""Script to initialize bot buttons in DB.
+Buttons are stored as individual btn_* keys in BotText table (JSON per button).
+"""
 import asyncio
+import json
 import os
 import sys
+from uuid import uuid4
 
 # Ensure we run from project root
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -9,19 +13,19 @@ sys.path.insert(0, os.getcwd())
 
 from backend.config import settings
 from backend.database import Base, get_engine
-from backend.models.config import BotButton, BotText
+from backend.models.config import BotText
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 DEFAULT_BUTTONS = [
-    {"text": "🎁 Бесплатный доступ", "callback_data": "free_trial", "url": "", "row": 0},
-    {"text": "💸 Оплатить тариф",     "callback_data": "buy_subscription", "url": "", "row": 1},
-    {"text": "👤 Личный кабинет",     "callback_data": "cabinet", "url": "", "row": 2},
-    {"text": "🎁 Получить бесплатно", "callback_data": "get_free", "url": "", "row": 2},
-    {"text": "🔗 Реферальная система","callback_data": "partner", "url": "", "row": 3},
-    {"text": "⚙️ Инструкция",         "callback_data": "instructions", "url": "", "row": 3},
-    {"text": "👨‍💻 Поддержка",           "callback_data": "support", "url": "", "row": 4},
-    {"text": "📢 Наш канал",           "callback_data": "channel", "url": "", "row": 4},
+    {"text": "🎁 Бесплатный доступ",  "callback_data": "free_trial",       "url": "", "row": 0},
+    {"text": "💸 Оплатить тариф",      "callback_data": "buy_subscription",  "url": "", "row": 1},
+    {"text": "👤 Личный кабинет",      "callback_data": "cabinet",           "url": "", "row": 2},
+    {"text": "🎁 Получить бесплатно",  "callback_data": "get_free",          "url": "", "row": 2},
+    {"text": "🔗 Реферальная система", "callback_data": "partner",           "url": "", "row": 3},
+    {"text": "⚙️ Инструкция",          "callback_data": "instructions",      "url": "", "row": 3},
+    {"text": "👨‍💻 Поддержка",            "callback_data": "support",           "url": "", "row": 4},
+    {"text": "📢 Наш канал",            "callback_data": "channel",           "url": "", "row": 4},
 ]
 
 
@@ -35,31 +39,55 @@ async def main():
     print("Tables created/verified OK")
 
     async with AsyncSession(engine) as session:
-        # Clear old buttons and insert defaults
-        await session.execute(text("DELETE FROM bot_buttons"))
+        # Show existing tables
+        result = await session.execute(text(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema='public' ORDER BY table_name"
+        ))
+        tables = [r[0] for r in result.fetchall()]
+        print(f"Tables in DB: {tables}")
+
+        # Delete all existing btn_* keys
+        existing = await session.execute(
+            select(BotText).where(BotText.key.like("btn_%"))
+        )
+        old_buttons = existing.scalars().all()
+        for old in old_buttons:
+            await session.delete(old)
+        if old_buttons:
+            print(f"Deleted {len(old_buttons)} old buttons")
+
+        # Insert new default buttons
         for btn in DEFAULT_BUTTONS:
-            await session.execute(text(
-                "INSERT INTO bot_buttons (text, callback_data, url, row, is_active) "
-                "VALUES (:text, :callback_data, :url, :row, true)"
-            ), btn)
+            key = f"btn_{uuid4().hex[:8]}"
+            value = json.dumps({
+                "text": btn["text"],
+                "callback_data": btn["callback_data"],
+                "url": btn["url"],
+                "row": btn["row"],
+            }, ensure_ascii=False)
+            session.add(BotText(
+                id=str(uuid4()),
+                key=key,
+                value=value,
+                description="menu_button"
+            ))
+
         await session.commit()
+        print(f"Inserted {len(DEFAULT_BUTTONS)} new buttons")
 
         # Verify
-        result = await session.execute(text("SELECT text, callback_data, row FROM bot_buttons ORDER BY row"))
-        rows = result.fetchall()
-        print("\nButtons in DB:")
-        for r in rows:
-            print(f"  row={r[2]} | {r[0]} -> {r[1]}")
-
-        # Check bot_texts
-        result2 = await session.execute(text("SELECT key FROM bot_texts LIMIT 20"))
-        texts = result2.fetchall()
-        print(f"\nBot texts count: {len(texts)}")
-        for t in texts:
-            print(f"  {t[0]}")
+        result2 = await session.execute(
+            select(BotText).where(BotText.key.like("btn_%")).order_by(BotText.key)
+        )
+        saved = result2.scalars().all()
+        print(f"\nButtons in DB ({len(saved)} total):")
+        for s in saved:
+            b = json.loads(s.value)
+            print(f"  [{s.key}] row={b['row']} | {b['text']} -> {b['callback_data']}")
 
     await engine.dispose()
-    print("\nAll done! Restart the bot service in AlwaysData panel.")
+    print("\nAll done! Now restart the bot service in AlwaysData panel.")
 
 
 if __name__ == "__main__":
