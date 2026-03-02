@@ -3,7 +3,7 @@ import os
 import json
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
@@ -640,8 +640,8 @@ async def create_broadcast(
 @router.post("/broadcast-image")
 async def create_broadcast_image(
     image: UploadFile = File(...),
-    message: Optional[str] = None,
-    target: str = "all",
+    message: Optional[str] = Form(default=None),
+    target: str = Form(default="all"),
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
