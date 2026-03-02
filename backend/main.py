@@ -85,7 +85,7 @@ os.makedirs(os.path.join(STATIC_DIR, "uploads"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Admin panel — собранные файлы React (npm run build → admin-panel/dist/)
-ADMIN_DIR = os.path.join(_BASE_DIR, "admin-panel", "dist")
+ADMIN_DIR = os.path.join(_ROOT_DIR, "admin-panel", "dist")
 if os.path.isdir(ADMIN_DIR):
     app.mount("/admin", StaticFiles(directory=ADMIN_DIR, html=True), name="admin")
     logger.info(f"Admin panel mounted at /admin from {ADMIN_DIR}")
