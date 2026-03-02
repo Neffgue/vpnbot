@@ -371,7 +371,7 @@ async def get_referral_info(
         "referral_link": referral_link,
         "referrals_count": len(referrals),
         "bonus_days": bonus_days,
-        "level": "АМБАССАДОР 👑" if len(referrals) >= 10 else ("ПРОДВИНУТЫЙ 🚀" if len(referrals) >= 5 else "НОВИЧОК 🐣"),
+        "level": "АМБАССАДОР" if len(referrals) >= 10 else ("ПРОДВИНУТЫЙ" if len(referrals) >= 5 else "НОВИЧОК 🐣"),
     }
 
 

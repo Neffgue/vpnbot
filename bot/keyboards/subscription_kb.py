@@ -5,10 +5,11 @@ from typing import List, Dict, Any
 
 
 def get_cabinet_keyboard() -> InlineKeyboardMarkup:
-    """Главная клавиатура личного кабинета — только Мои устройства по ТЗ."""
+    """Главная клавиатура личного кабинета — только Мои устройства + Назад по ТЗ."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📱 Мои устройства", callback_data="manage_devices")],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")],
         ]
     )
 
