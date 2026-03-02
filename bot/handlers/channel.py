@@ -19,24 +19,7 @@ CHANNEL_URL = "https://t.me/techwizardsru"
 @router.callback_query(F.data == "channel")
 async def channel_handler(callback: CallbackQuery, state: FSMContext) -> None:
     """
-    Handle channel button — redirect directly to channel
+    Handle channel button — redirect directly to channel without intermediate page
     """
-    await callback.answer()
-    # Перенаправляем сразу по ссылке через URL-кнопку
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Перейти на канал", url=CHANNEL_URL)],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")],
-    ])
-    try:
-        await callback.message.edit_text(
-            "📢 <b>Наш канал</b>\n\nНажмите кнопку ниже, чтобы перейти в наш Telegram-канал:",
-            parse_mode="HTML",
-            reply_markup=keyboard,
-        )
-    except Exception:
-        await callback.message.answer(
-            "📢 <b>Наш канал</b>\n\nНажмите кнопку ниже, чтобы перейти в наш Telegram-канал:",
-            parse_mode="HTML",
-            reply_markup=keyboard,
-        )
+    # Сразу открываем канал — без промежуточного текста
+    await callback.answer(url=CHANNEL_URL)

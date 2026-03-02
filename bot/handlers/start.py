@@ -29,11 +29,13 @@ def _resolve_media(path_or_url: str) -> "str | bytes | None":
         return path_or_url
     # Локальный путь — читаем с диска
     # Пробуем несколько вариантов пути
+    _project_root = "/home/neffgue313/vpnbot"
     candidates = [
-        path_or_url,                                          # как есть
-        "/app" + path_or_url,                                 # /app/static/uploads/...
-        os.path.join("/app", path_or_url.lstrip("/")),        # нормализованный
-        "/static" + path_or_url if not path_or_url.startswith("/static") else path_or_url,
+        path_or_url,
+        os.path.join(_project_root, path_or_url.lstrip("/")),
+        os.path.join(_project_root, "static", "uploads", os.path.basename(path_or_url)),
+        "/app" + path_or_url,
+        os.path.join("/app", path_or_url.lstrip("/")),
     ]
     for candidate in candidates:
         try:

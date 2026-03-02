@@ -20,23 +20,7 @@ SUPPORT_URL = "https://t.me/TechWizardsSupport"
 @router.callback_query(F.data == "support")
 async def support_handler(callback: CallbackQuery, state: FSMContext) -> None:
     """
-    Handle support button — redirect directly to support
+    Handle support button — redirect directly to support chat without intermediate page
     """
-    await callback.answer()
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💬 Написать в поддержку", url=SUPPORT_URL)],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")],
-    ])
-    try:
-        await callback.message.edit_text(
-            "💬 <b>Поддержка</b>\n\nНажмите кнопку ниже, чтобы написать нам:",
-            parse_mode="HTML",
-            reply_markup=keyboard,
-        )
-    except Exception:
-        await callback.message.answer(
-            "💬 <b>Поддержка</b>\n\nНажмите кнопку ниже, чтобы написать нам:",
-            parse_mode="HTML",
-            reply_markup=keyboard,
-        )
+    # Сразу открываем ссылку — без промежуточного текста
+    await callback.answer(url=SUPPORT_URL)

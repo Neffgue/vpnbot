@@ -27,6 +27,8 @@ def _build_default_buttons(show_free_trial: bool = True) -> list:
         ],
         [
             InlineKeyboardButton(text="👨‍💻 Поддержка", url="https://t.me/TechWizardsSupport"),
+        ],
+        [
             InlineKeyboardButton(text="📢 Наш канал", url="https://t.me/techwizardsru"),
         ],
     ]

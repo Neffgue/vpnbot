@@ -24,8 +24,11 @@ def _resolve_media(path_or_url: str):
         return None
     if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
         return path_or_url
+    _project_root = "/home/neffgue313/vpnbot"
     candidates = [
         path_or_url,
+        os.path.join(_project_root, path_or_url.lstrip("/")),
+        os.path.join(_project_root, "static", "uploads", os.path.basename(path_or_url)),
         "/app" + path_or_url,
         os.path.join("/app", path_or_url.lstrip("/")),
     ]
@@ -141,9 +144,9 @@ async def cabinet_handler(callback: CallbackQuery, state: FSMContext) -> None:
             cabinet_text = (
                 f"<b>👤 Профиль:</b>\n"
                 f"<blockquote>"
-                f"<code>Имя: {first_name}</code>\n"
-                f"<code>ID: {user_id}</code>\n"
-                f"<code>💳 Баланс: {balance} ₽</code>"
+                f"Имя: {first_name}\n"
+                f"ID: {user_id}\n"
+                f"💳 Баланс: {balance} ₽"
                 f"</blockquote>\n\n"
             )
 
@@ -154,10 +157,10 @@ async def cabinet_handler(callback: CallbackQuery, state: FSMContext) -> None:
                 cabinet_text += (
                     f"<b>📦 Информация о тарифе:</b>\n"
                     f"<blockquote>"
-                    f"<code>📋 Группа: {plan_group}</code>\n"
-                    f"<code>💎 Тариф: {plan_period}</code>\n"
-                    f"<code>📱 Лимит устройств: {device_limit}</code>\n"
-                    f"<code>🔄 Привязанных устройств: {device_count}</code>"
+                    f"📋 Группа: {plan_group}\n"
+                    f"💎 Тариф: {plan_period}\n"
+                    f"📱 Лимит устройств: {device_limit}\n"
+                    f"🔄 Привязанных устройств: {device_count}"
                     f"</blockquote>\n\n"
                     f"📆 Срок действия: {expire_str}"
                 )
