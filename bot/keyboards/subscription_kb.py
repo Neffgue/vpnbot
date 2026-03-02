@@ -8,15 +8,7 @@ def get_cabinet_keyboard() -> InlineKeyboardMarkup:
     """Главная клавиатура личного кабинета — только Мои устройства по ТЗ."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📱 Мои устройства", callback_data="manage_devices"),
-            ],
-            [
-                InlineKeyboardButton(text="💸 Продлить подписку", callback_data="buy_subscription"),
-            ],
-            [
-                InlineKeyboardButton(text="🏠 На главную", callback_data="back_to_menu"),
-            ],
+            [InlineKeyboardButton(text="📱 Мои устройства", callback_data="manage_devices")],
         ]
     )
 
@@ -46,14 +38,14 @@ def get_device_keyboard(devices: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
         device_id = device.get("id", "")
         model = device.get("model") or device.get("name") or device.get("server", "Устройство")
         buttons.append([InlineKeyboardButton(
-            text=f"🗑️ Удалить устройство",
+            text="Удалить устройство",
             callback_data=f"delete_device_{device_id}",
         )])
     buttons.append([
-        InlineKeyboardButton(text="📲 Подключить устройство", callback_data="add_device"),
+        InlineKeyboardButton(text="Подключить устройство", callback_data="add_device"),
     ])
     buttons.append([
-        InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_cabinet"),
+        InlineKeyboardButton(text="Назад", callback_data="back_to_cabinet"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

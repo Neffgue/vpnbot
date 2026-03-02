@@ -16,8 +16,10 @@ const DEFAULT_KEYS = [
   { key: 'payment_success', label: 'Успешная оплата' },
   { key: 'payment_failed', label: 'Ошибка оплаты' },
   { key: 'subscription_expiring_24h', label: 'Уведомление за 24 часа до конца' },
+  { key: 'subscription_expiring_12h', label: 'Уведомление за 12 часов до конца' },
   { key: 'subscription_expiring_1h', label: 'Уведомление за 1 час до конца' },
   { key: 'subscription_expired', label: 'Подписка истекла' },
+  { key: 'subscription_expired_3h', label: 'Истекла 3 часа назад' },
 ]
 
 export default function BotTexts() {

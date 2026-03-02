@@ -29,8 +29,8 @@ def _get_free_keyboard(ref_link: str) -> InlineKeyboardMarkup:
     share_text = "🔥 Попробуй лучший VPN! Быстро, надёжно, без ограничений."
     share_url = f"https://t.me/share/url?url={ref_link}&text={share_text}"
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔗 Поделиться ссылкой", url=share_url)],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")],
+        [InlineKeyboardButton(text="Поделиться ссылкой", url=share_url)],
+        [InlineKeyboardButton(text="Назад", callback_data="back_to_menu")],
     ])
 
 
@@ -55,14 +55,14 @@ async def get_free_handler(callback: CallbackQuery, state: FSMContext) -> None:
 
             # Определяем уровень
             if referrals_count >= 10:
-                level = "АМБАССАДОР 👑"
+                level = "АМБАССАДОР"
             elif referrals_count >= 5:
-                level = "ПРОДВИНУТЫЙ 🚀"
+                level = "ПРОДВИНУТЫЙ"
             else:
                 level = "НОВИЧОК 🐣"
 
             text = (
-                "🤩 <b>Расскажите друзьям о нашем VPN!</b>\n\n"
+                "🤩 Расскажите друзьям о нашем VPN!\n\n"
                 "🤝 Приглашайте новых пользователей и повышайте свой статус. "
                 "Когда ваш реферал оплатит подписку, вы оба получаете бонусные дни! "
                 "Чем выше ваш уровень — тем щедрее бонусы за каждого приглашённого.\n\n"
@@ -79,8 +79,8 @@ async def get_free_handler(callback: CallbackQuery, state: FSMContext) -> None:
                 "Бонус вашего реферала - 7 дней"
                 "</blockquote>\n\n"
                 "<i>(Реферал — это человек, пришедший по вашей ссылке и оплативший подписку)</i>\n\n"
-                "Вот ваша реферальная ссылка:\n"
-                "👇 Нажмите, чтобы скопировать.\n"
+                "<code>Вот ваша реферальная ссылка:</code>\n"
+                "<code>👇 Нажмите, чтобы скопировать.</code>\n"
                 f"<code>{ref_link}</code>\n\n"
                 "<blockquote>"
                 f"Ваш текущий уровень - {level}\n"

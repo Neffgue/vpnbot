@@ -161,15 +161,30 @@ INSTRUCTIONS = {
 }
 
 
-def _step_keyboard(device: str, step_idx: int, total_steps: int, include_downloads: bool = False) -> InlineKeyboardMarkup:
+def _step_keyboard(
+    device: str,
+    step_idx: int,
+    total_steps: int,
+    include_downloads: bool = False,
+    extra_buttons: list[dict] | None = None,
+) -> InlineKeyboardMarkup:
     """Клавиатура навигации по шагам инструкции.
-    Если include_downloads=True — добавляет кнопки скачивания для данного устройства."""
+    Если include_downloads=True — добавляет кнопки скачивания для данного устройства.
+    extra_buttons — список кнопок-ссылок [{"text": "...", "url": "..."}]."""
     buttons = []
 
     # Кнопки скачивания (для первого шага или если указано явно)
     if include_downloads and device in DOWNLOAD_BUTTONS:
         for text, url in DOWNLOAD_BUTTONS[device]:
             buttons.append([InlineKeyboardButton(text=text, url=url)])
+
+    # Кнопки-ссылки для шага
+    if extra_buttons:
+        for btn in extra_buttons:
+            text = (btn or {}).get("text")
+            url = (btn or {}).get("url")
+            if text and url:
+                buttons.append([InlineKeyboardButton(text=text, url=url)])
 
     # Навигация назад/вперёд
     nav_row = []
@@ -244,7 +259,13 @@ async def _send_step(callback: CallbackQuery, device: str, step_idx: int) -> Non
 
     # Показываем кнопки скачивания на первом шаге (или если в тексте есть упоминание «кнопки ниже»)
     include_downloads = step_idx == 0 and device in DOWNLOAD_BUTTONS
-    keyboard = _step_keyboard(device, step_idx, total, include_downloads=include_downloads)
+    keyboard = _step_keyboard(
+        device,
+        step_idx,
+        total,
+        include_downloads=include_downloads,
+        extra_buttons=step.get("buttons") or [],
+    )
 
     # Если есть картинка — отправляем с фото
     if image_url:

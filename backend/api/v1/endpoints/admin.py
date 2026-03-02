@@ -254,17 +254,21 @@ DEFAULT_BOT_TEXTS = {
     "payment_success": "✅ Оплата прошла успешно! Подписка активирована.",
     "payment_failed": "❌ Ошибка оплаты. Попробуйте снова или обратитесь в поддержку.",
     "subscription_expiring_24h": "⏰ Ваша подписка истекает через 24 часа. Продлите чтобы не потерять доступ.",
+    "subscription_expiring_12h": "⏰ Ваша подписка истекает через 12 часов. Продлите чтобы не потерять доступ.",
     "subscription_expiring_1h": "⚠️ Ваша подписка истекает через 1 час!",
     "subscription_expired": "❌ Ваша подписка истекла. Оформите новую для продолжения работы.",
+    "subscription_expired_3h": "❌ Ваша подписка истекла 3 часа назад. Продлите чтобы восстановить доступ.",
+
 }
 
 DEFAULT_BOT_BUTTONS = [
     {"text": "🎁 Бесплатный доступ", "callback_data": "free_trial", "url": "", "row": 0},
     {"text": "💸 Оплатить тариф", "callback_data": "buy_subscription", "url": "", "row": 1},
     {"text": "👤 Личный кабинет", "callback_data": "cabinet", "url": "", "row": 2},
-    {"text": "👥 Партнёрка", "callback_data": "referral", "url": "", "row": 2},
-    {"text": "📖 Инструкция", "callback_data": "instructions", "url": "", "row": 3},
-    {"text": "💬 Поддержка", "callback_data": "support", "url": "", "row": 3},
+    {"text": "🎁 Получить бесплатно", "callback_data": "get_free", "url": "", "row": 2},
+    {"text": "🔗 Реферальная система", "callback_data": "partner", "url": "", "row": 3},
+    {"text": "⚙️ Инструкция по подключению", "callback_data": "instructions", "url": "", "row": 3},
+    {"text": "👨‍💻 Поддержка", "callback_data": "support", "url": "", "row": 4},
     {"text": "📢 Наш канал", "callback_data": "channel", "url": "", "row": 4},
 ]
 

@@ -141,23 +141,23 @@ async def cabinet_handler(callback: CallbackQuery, state: FSMContext) -> None:
             cabinet_text = (
                 f"<b>👤 Профиль:</b>\n"
                 f"<blockquote>"
-                f"Имя: {first_name}\n"
-                f"ID: {user_id}\n"
-                f"💳 Баланс: {balance} ₽"
+                f"<code>Имя: {first_name}</code>\n"
+                f"<code>ID: {user_id}</code>\n"
+                f"<code>💳 Баланс: {balance} ₽</code>"
                 f"</blockquote>\n\n"
             )
 
             if sub_link:
-                cabinet_text += f"<b>🔑 Ваша подписка:</b>\n<code>{sub_link}</code>\n\n"
+                cabinet_text += f"<b>🔑 Ваша подписка:</b>\n{sub_link}\n\n"
 
             if subscription:
                 cabinet_text += (
                     f"<b>📦 Информация о тарифе:</b>\n"
                     f"<blockquote>"
-                    f"📋 Группа: {plan_group}\n"
-                    f"💎 Тариф: {plan_period}\n"
-                    f"📱 Лимит устройств: {device_limit}\n"
-                    f"🔄 Привязанных устройств: {device_count}"
+                    f"<code>📋 Группа: {plan_group}</code>\n"
+                    f"<code>💎 Тариф: {plan_period}</code>\n"
+                    f"<code>📱 Лимит устройств: {device_limit}</code>\n"
+                    f"<code>🔄 Привязанных устройств: {device_count}</code>"
                     f"</blockquote>\n\n"
                     f"📆 Срок действия: {expire_str}"
                 )
@@ -232,8 +232,9 @@ async def manage_devices(callback: CallbackQuery, state: FSMContext) -> None:
             # Формируем текст по ТЗ
             lines = []
             if hwid:
-                lines.append(f"💻 <b>HWID устройства</b>")
-                lines.append(f"🔑 <code>{hwid}</code>\n")
+                lines.append("💻 <b>HWID устройства</b>")
+                lines.append(f"🔑 <code>{hwid}</code>")
+                lines.append("")
 
             lines.append(f"Привязано: {len(devices)}")
 
