@@ -13,7 +13,6 @@ sys.path.insert(0, os.getcwd())
 
 from backend.config import settings
 from backend.database import Base, get_engine
-from backend.models.config import BotText
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select
 
@@ -47,17 +46,12 @@ async def main():
         tables = [r[0] for r in result.fetchall()]
         print(f"Tables in DB: {tables}")
 
-        # Delete all existing btn_* keys
-        existing = await session.execute(
-            select(BotText).where(BotText.key.like("btn_%"))
-        )
-        old_buttons = existing.scalars().all()
-        for old in old_buttons:
-            await session.delete(old)
-        if old_buttons:
-            print(f"Deleted {len(old_buttons)} old buttons")
+        # Delete all existing btn_* keys using raw SQL
+        await session.execute(text("DELETE FROM bot_texts WHERE key LIKE 'btn_%'"))
+        await session.commit()
+        print("Deleted old btn_* keys")
 
-        # Insert new default buttons
+        # Insert new default buttons using raw SQL
         for btn in DEFAULT_BUTTONS:
             key = f"btn_{uuid4().hex[:8]}"
             value = json.dumps({
@@ -66,25 +60,23 @@ async def main():
                 "url": btn["url"],
                 "row": btn["row"],
             }, ensure_ascii=False)
-            session.add(BotText(
-                id=str(uuid4()),
-                key=key,
-                value=value,
-                description="menu_button"
-            ))
+            await session.execute(text(
+                "INSERT INTO bot_texts (id, key, value, description) "
+                "VALUES (:id, :key, :value, :desc)"
+            ), {"id": str(uuid4()), "key": key, "value": value, "desc": "menu_button"})
 
         await session.commit()
         print(f"Inserted {len(DEFAULT_BUTTONS)} new buttons")
 
         # Verify
-        result2 = await session.execute(
-            select(BotText).where(BotText.key.like("btn_%")).order_by(BotText.key)
-        )
-        saved = result2.scalars().all()
+        result2 = await session.execute(text(
+            "SELECT key, value FROM bot_texts WHERE key LIKE 'btn_%' ORDER BY key"
+        ))
+        saved = result2.fetchall()
         print(f"\nButtons in DB ({len(saved)} total):")
         for s in saved:
-            b = json.loads(s.value)
-            print(f"  [{s.key}] row={b['row']} | {b['text']} -> {b['callback_data']}")
+            b = json.loads(s[1])
+            print(f"  [{s[0]}] row={b['row']} | {b['text']} -> {b['callback_data']}")
 
     await engine.dispose()
     print("\nAll done! Now restart the bot service in AlwaysData panel.")
