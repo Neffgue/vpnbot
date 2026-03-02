@@ -516,9 +516,11 @@ async def save_bot_settings(
 # UPLOAD IMAGE
 # ═══════════════════════════════════════════════════════════════
 
-# Prefer repo-root /static/uploads (production), fallback to backend/static/uploads
-_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-_ROOT_DIR = os.path.dirname(_BACKEND_DIR)
+# При запуске через uWSGI __file__ = .../vpnbot/backend/api/v1/endpoints/admin.py
+# Идём вверх: endpoints → v1 → api → backend → vpnbot
+_ENDPOINTS_DIR = os.path.dirname(os.path.abspath(__file__))   # .../backend/api/v1/endpoints
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(_ENDPOINTS_DIR)))  # .../backend
+_ROOT_DIR = os.path.dirname(_BACKEND_DIR)                     # .../vpnbot
 ROOT_STATIC_DIR = os.path.join(_ROOT_DIR, "static")
 STATIC_DIR = ROOT_STATIC_DIR if os.path.isdir(ROOT_STATIC_DIR) else os.path.join(_BACKEND_DIR, "static")
 UPLOAD_DIR = os.path.join(STATIC_DIR, "uploads")

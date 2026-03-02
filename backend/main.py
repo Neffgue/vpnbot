@@ -74,11 +74,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Определяем корень проекта — папка vpnbot
+# При запуске через uWSGI __file__ = /home/neffgue313/vpnbot/backend/main.py
+# поэтому идём на 2 уровня вверх: backend → vpnbot
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))  # .../vpnbot/backend
+_ROOT_DIR = os.path.dirname(_BACKEND_DIR)                  # .../vpnbot
+
 # Статические файлы (загруженные изображения для бота)
-# Пытаемся использовать /static в корне репозитория (production),
-# иначе fallback на backend/static (локальная разработка).
-_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_ROOT_DIR = os.path.dirname(_BACKEND_DIR)
 ROOT_STATIC_DIR = os.path.join(_ROOT_DIR, "static")
 STATIC_DIR = ROOT_STATIC_DIR if os.path.isdir(ROOT_STATIC_DIR) else os.path.join(_BACKEND_DIR, "static")
 os.makedirs(os.path.join(STATIC_DIR, "uploads"), exist_ok=True)
