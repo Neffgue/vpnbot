@@ -1,0 +1,174 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.prod
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+
+# Logs
+logs/
+*.log
+*.pot
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+pg_data/
+
+# Cache
+.cache/
+*.cache
+
+# Temporary files
+*.tmp
+tmp_*/
+temp/
+*.bak
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+.directory
+
+# Docker volumes (local development)
+postgres_data/
+redis_data/
+
+# Certificates (use Let's Encrypt in production)
+nginx/certs/
+*.pem
+*.key
+*.crt
+
+# Backups
+backups/
+*.sql.gz
+
+# IDE generated files
+.vscode/settings.json
+.vscode/launch.json
+*.iml
+
+# CI/CD
+.github/workflows/secrets.yml
+
+# Лишние отчёты и временные файлы анализа
+ANALYSIS_*.md
+ANALYSIS_*.txt
+AUDIT_REPORT.md
+BACKEND_ANALYSIS.md
+BACKEND_CODE_ANALYSIS.md
+BOT_ARCHITECTURE_REPORT.md
+BOT_COMPLETE_SUMMARY.md
+BUG_REPORT.md
+CABINET_ERROR_ANALYSIS.md
+CABINET_ERROR_SUMMARY.txt
+CELERY_TASKS_REFERENCE.md
+CODE_ISSUES_DETAILED.md
+COMPLETION_REPORT.md
+DELIVERY_SUMMARY.txt
+EXPLORATION_SUMMARY.md
+FILES_CREATED.md
+FINAL_SUMMARY.txt
+FIXES_APPLIED.md
+FIXES_READY_TO_APPLY.md
+IMPLEMENTATION_CHECKLIST.md
+INDEX.md
+PROJECT_COMPLETE.md
+PROJECT_SUMMARY.md
+QUICK_REFERENCE.md
+QUICK_START.md
+START_HERE.md
+admin_panel_analysis_report.md
+readmePrompt1.md
+Failed.txt
+Fix.txt
+text.txt
+textBot.txt
+ReadmeB.txt
+bot_logs.txt
+dev_config.py
+local_setup.py
+run_backend.py
+run_bot.py
+start_bot.bat
+start_bot.sh
+start_local.bat
+
+# Скриншоты
+Pictures/
+
+# Локальные конфиги
+docker-compose.local.yml
+docker-compose.override.yml
+docker-compose.scale.yml
+docker-compose.test.yml
+docker-compose.infra.yml
+
+# Rovodev агент
+.rovodev/

@@ -1,0 +1,26 @@
+# FastAPI & ASGI
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+a2wsgi==1.10.7
+
+# Database
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+alembic==1.13.0
+psycopg2-binary==2.9.9
+
+# Auth & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+cryptography==41.0.7
+
+# Request parsing
+python-multipart==0.0.6
+
+# HTTP Client
+httpx==0.25.2
+
+# Config
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0

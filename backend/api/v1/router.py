@@ -1,0 +1,290 @@
+import os
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
+
+from backend.api.v1.endpoints import auth, users, subscriptions, servers, payments, referrals, admin, vpn_config
+from backend.api.deps import get_admin_user
+from backend.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+
+api_router = APIRouter(prefix="/api/v1")
+
+# Include all endpoint routers
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])
+api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
+api_router.include_router(servers.router, prefix="/servers", tags=["servers"])
+api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
+api_router.include_router(referrals.router, prefix="/referrals", tags=["referrals"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(vpn_config.router, prefix="/vpn", tags=["vpn"])
+
+
+# ── Compatibility aliases for compiled frontend JS ──────────────────────────
+# The compiled admin-panel JS uses /api/v1/settings and /api/v1/stats/dashboard
+# These aliases forward to the correct /admin/* endpoints.
+
+@api_router.get("/settings", tags=["compat"])
+async def settings_get_compat(
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: GET /settings → GET /admin/system-settings"""
+    from backend.api.v1.endpoints.admin import get_system_settings
+    return await get_system_settings(current_user=current_user, db=db)
+
+
+@api_router.put("/settings", tags=["compat"])
+async def settings_put_compat(
+    request: Request,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: PUT /settings → PUT /admin/system-settings"""
+    from backend.api.v1.endpoints.admin import update_system_settings
+    from backend.schemas.admin import SystemSettingsUpdate
+    body = await request.json()
+    data = SystemSettingsUpdate(**body)
+    return await update_system_settings(data=data, current_user=current_user, db=db)
+
+
+@api_router.get("/stats/dashboard", tags=["compat"])
+async def stats_dashboard_compat(
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: GET /stats/dashboard → GET /admin/stats"""
+    from backend.api.v1.endpoints.admin import get_stats
+    return await get_stats(current_user=current_user, db=db)
+
+
+@api_router.get("/auth/profile", tags=["compat"])
+async def auth_profile_compat(
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return current admin user profile (used by compiled frontend)."""
+    # Resolve the real admin UUID and username for web panel admin
+    _FIXED_ADMIN_UUID = "00000000-0000-0000-0000-000000000001"
+    user_id = str(current_user.id)
+    if user_id in ("bot-admin", _FIXED_ADMIN_UUID):
+        admin_username = os.getenv("ADMIN_USERNAME", "admin")
+        return {
+            "id": _FIXED_ADMIN_UUID,
+            "username": admin_username,
+            "first_name": "Admin",
+            "is_admin": True,
+            "telegram_id": -1,
+            "balance": 0.0,
+            "created_at": None,
+        }
+    return {
+        "id": user_id,
+        "username": current_user.username or "admin",
+        "first_name": current_user.first_name or "Admin",
+        "is_admin": current_user.is_admin,
+        "telegram_id": current_user.telegram_id,
+        "balance": float(current_user.balance) if current_user.balance else 0.0,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+    }
+
+
+@api_router.post("/auth/logout", tags=["compat"])
+async def auth_logout_compat(
+    current_user=Depends(get_admin_user),
+):
+    """Logout endpoint — client removes tokens from localStorage."""
+    return {"message": "Logged out successfully"}
+
+
+@api_router.get("/users", tags=["compat"])
+async def users_list_compat(
+    request: Request,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: GET /users?page=N&limit=N → GET /admin/users with pagination."""
+    from backend.services.user_service import UserService
+    params = dict(request.query_params)
+    page = int(params.get("page", 1))
+    limit = int(params.get("limit", 20))
+    search = params.get("search", "").strip()
+    skip = (page - 1) * limit
+
+    service = UserService(db)
+    if search:
+        users = await service.search_users(search, skip=skip, limit=limit)
+    else:
+        users = await service.get_all_users(skip=skip, limit=limit)
+
+    total = await service.repo.count()
+    return {
+        "users": [
+            {
+                "id": str(u.id),
+                "telegram_id": u.telegram_id,
+                "username": u.username,
+                "first_name": u.first_name,
+                "balance": float(u.balance) if u.balance else 0.0,
+                "is_banned": u.is_banned,
+                "is_admin": u.is_admin,
+                "free_trial_used": u.free_trial_used,
+                "referral_code": u.referral_code,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in users
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": (total + limit - 1) // limit if limit else 1,
+    }
+
+
+
+# ── Public bot endpoints (no auth needed — used by the bot itself) ─────────
+# These allow the bot process to fetch texts, settings, and buttons without admin auth.
+# We query DB directly here instead of calling FastAPI endpoint functions (which have Depends).
+
+@api_router.get("/bot-texts/public", tags=["public"])
+async def bot_texts_public(db: AsyncSession = Depends(get_db)):
+    """Public: Get all bot texts (for the bot process, no auth)."""
+    import json as _json
+    from sqlalchemy import select as _select
+    from backend.models.config import BotText as _BotText
+    try:
+        stmt = _select(_BotText).order_by(_BotText.key)
+        result = await db.execute(stmt)
+        rows = result.scalars().all()
+        out = {}
+        # Пропускаем служебные ключи, остальные — тексты бота
+        SKIP_KEYS = {"bot_settings_json", "bot_buttons_json", "system_settings_json"}
+        for row in rows:
+            if row.key in SKIP_KEYS:
+                continue
+            # Значение — всегда строка (текст сообщения)
+            out[row.key] = row.value
+        return out
+    except Exception as e:
+        return {}
+
+
+@api_router.get("/bot-settings/public", tags=["public"])
+async def bot_settings_public(db: AsyncSession = Depends(get_db)):
+    """Public: Get bot settings (welcome image, etc.) for the bot process."""
+    import json as _json
+    from sqlalchemy import select as _select
+    from backend.models.config import BotText as _BotText
+    BOT_SETTINGS_KEY = "bot_settings_json"
+    try:
+        stmt = _select(_BotText).where(_BotText.key == BOT_SETTINGS_KEY)
+        result = await db.execute(stmt)
+        row = result.scalars().first()
+        if row:
+            try:
+                return _json.loads(row.value)
+            except Exception:
+                return {}
+        return {}
+    except Exception:
+        return {}
+
+
+@api_router.get("/bot-buttons/public", tags=["public"])
+async def bot_buttons_public(db: AsyncSession = Depends(get_db)):
+    """Public: Get bot menu buttons for the bot process.
+    Buttons are stored as individual btn_* keys in BotText table.
+    """
+    import json as _json
+    from sqlalchemy import select as _select
+    from backend.models.config import BotText as _BotText
+    try:
+        stmt = _select(_BotText).where(_BotText.key.like("btn_%")).order_by(_BotText.key)
+        result = await db.execute(stmt)
+        rows = result.scalars().all()
+        buttons = []
+        for r in rows:
+            try:
+                btn = _json.loads(r.value)
+                btn["id"] = r.key
+                buttons.append(btn)
+            except Exception:
+                pass
+        return {"buttons": buttons}
+    except Exception:
+        return {"buttons": []}
+
+
+@api_router.get("/instructions/public", tags=["public"])
+async def instructions_public(db: AsyncSession = Depends(get_db)):
+    """Public: Get all instruction steps for all devices (for the bot process, no auth)."""
+    import json as _json
+    from sqlalchemy import select as _select
+    from backend.models.config import BotText as _BotText
+    INSTR_PREFIXES = (
+        "instructions_android_steps",
+        "instructions_ios_steps",
+        "instructions_windows_steps",
+        "instructions_macos_steps",
+        "instructions_linux_steps",
+        "instructions_android_tv_steps",
+    )
+    try:
+        stmt = _select(_BotText).where(_BotText.key.in_(list(INSTR_PREFIXES)))
+        result = await db.execute(stmt)
+        rows = result.scalars().all()
+        out = {}
+        for row in rows:
+            try:
+                out[row.key] = _json.loads(row.value)
+            except Exception:
+                out[row.key] = row.value
+        return out
+    except Exception:
+        return {}
+
+
+@api_router.get("/payments", tags=["compat"])
+async def payments_list_compat(
+    request: Request,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: GET /payments?page=N&limit=N&status=X → GET /admin/payments."""
+    from backend.models.payment import Payment
+    from sqlalchemy import select, func
+    params = dict(request.query_params)
+    page = int(params.get("page", 1))
+    limit = int(params.get("limit", 20))
+    status_filter = params.get("status", "all")
+    skip = (page - 1) * limit
+
+    stmt = select(Payment).order_by(Payment.created_at.desc()).offset(skip).limit(limit)
+    if status_filter and status_filter != "all":
+        stmt = select(Payment).where(Payment.status == status_filter).order_by(Payment.created_at.desc()).offset(skip).limit(limit)
+
+    result = await db.execute(stmt)
+    payments = result.scalars().all()
+
+    count_stmt = select(func.count(Payment.id))
+    if status_filter and status_filter != "all":
+        count_stmt = select(func.count(Payment.id)).where(Payment.status == status_filter)
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    return {
+        "payments": [
+            {
+                "id": str(p.id),
+                "user_id": str(p.user_id),
+                "amount": float(p.amount),
+                "status": p.status,
+                "payment_method": getattr(p, "payment_method", "unknown"),
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in payments
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": (total + limit - 1) // limit if limit else 1,
+    }

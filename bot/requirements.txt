@@ -1,0 +1,23 @@
+# Telegram Bot
+aiogram==3.4.1
+
+# Async HTTP
+aiohttp==3.9.1
+aiofiles==23.2.1
+httpx==0.25.2
+
+# Cache
+redis==5.0.1
+
+# Config
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Database
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+
+# Auth
+python-jose[cryptography]==3.3.0
+cryptography==41.0.7
