@@ -287,3 +287,53 @@ class APIClient:
                 "type": notification_type,
             }
         )
+
+    # ── Subscription plans (цены) ──────────────────────────────
+    async def get_subscription_plans(self) -> list:
+        """Получить список тарифных планов."""
+        try:
+            return await self.get("/subscriptions/plans")
+        except Exception:
+            return []
+
+    async def update_subscription_plan(self, plan_id: str, data: dict) -> Dict[str, Any]:
+        """Обновить тарифный план (цену и т.д.)."""
+        return await self.patch(f"/admin/subscriptions/plans/{plan_id}", json=data)
+
+    # ── Bot buttons (изображения) ──────────────────────────────
+    async def get_bot_buttons(self) -> list:
+        """Получить список кнопок меню бота."""
+        try:
+            return await self.get("/bot-buttons/public")
+        except Exception:
+            return []
+
+    async def update_bot_button(self, btn_id: str, data: dict) -> Dict[str, Any]:
+        """Обновить кнопку меню бота."""
+        return await self.patch(f"/admin/bot-buttons/{btn_id}", json=data)
+
+    # ── Instruction steps (изображения) ───────────────────────
+    async def get_instruction_steps(self, device: str) -> list:
+        """Получить шаги инструкции для устройства."""
+        try:
+            return await self.get(f"/instructions/{device}/steps")
+        except Exception:
+            return []
+
+    async def update_instruction_step(self, device: str, step_num: int, data: dict) -> Dict[str, Any]:
+        """Обновить шаг инструкции (изображение и т.д.)."""
+        return await self.patch(f"/admin/instructions/{device}/steps/{step_num}", json=data)
+
+    async def patch(self, endpoint: str, **kwargs) -> Dict[str, Any]:
+        """PATCH request helper."""
+        url = f"{self.base_url}{endpoint}"
+        try:
+            response = await self.client.patch(url, **kwargs)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error on PATCH {url}: {e.response.status_code} — {e.response.text}")
+            return {"error": str(e), "status_code": e.response.status_code}
+        except Exception as e:
+            logger.error(f"Error on PATCH {url}: {e}")
+            return {"error": str(e)}

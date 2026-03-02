@@ -1,8 +1,11 @@
 """Admin panel handler"""
 
 import logging
+import os
+import uuid
+import aiofiles
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
 
@@ -11,6 +14,8 @@ from bot.keyboards.main_menu import get_main_menu_with_admin
 from bot.keyboards.admin_kb import get_admin_menu, get_admin_confirm_keyboard, get_admin_back_keyboard
 from bot.states.admin_states import AdminStates
 from bot.utils.api_client import APIClient
+
+UPLOAD_DIR = "/home/neffgue313/vpnbot/static/uploads"
 
 logger = logging.getLogger(__name__)
 
@@ -557,3 +562,387 @@ async def unban_user_handler(message: Message, state: FSMContext) -> None:
         logger.error(f"Error unbanning user: {e}")
         await message.answer(f"❌ Ошибка при разблокировке: {e}")
         await state.clear()
+
+
+# ═══════════════════════════════════════════════════════════════
+# ТАРИФЫ И ЦЕНЫ
+# ═══════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_prices")
+async def admin_prices_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """Показать список тарифов с ценами."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as client:
+            plans = await client.get_subscription_plans()
+    except Exception as e:
+        plans = []
+        logger.error(f"Error fetching plans: {e}")
+
+    if not plans:
+        text = "❌ Тарифы не найдены или ошибка получения данных."
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_menu")]
+        ])
+        try:
+            await callback.message.edit_text(text, reply_markup=kb)
+        except Exception:
+            await callback.message.answer(text, reply_markup=kb)
+        return
+
+    lines = ["💲 <b>Тарифы и цены</b>\n"]
+    btns = []
+    for plan in plans:
+        pid = plan.get("id", "?")
+        name = plan.get("name", "—")
+        price = plan.get("price", "—")
+        duration = plan.get("duration_days", "?")
+        lines.append(f"<b>{name}</b> — {price} ₽ / {duration} дн. [ID: {pid}]")
+        btns.append([InlineKeyboardButton(
+            text=f"✏️ {name} ({price} ₽)",
+            callback_data=f"admin_price_edit_{pid}"
+        )])
+    btns.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_menu")])
+
+    text = "\n".join(lines) + "\n\nНажмите на тариф чтобы изменить цену:"
+    kb = InlineKeyboardMarkup(inline_keyboard=btns)
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("admin_price_edit_"))
+async def admin_price_edit(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выбрать тариф для изменения цены."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    plan_id = callback.data.replace("admin_price_edit_", "")
+    await state.update_data(price_plan_id=plan_id)
+    await state.set_state(AdminStates.waiting_price_amount)
+
+    try:
+        await callback.message.edit_text(
+            f"✏️ <b>Изменение цены тарифа ID: {plan_id}</b>\n\n"
+            "Введите новую цену в рублях (только число, например: 299):"
+        )
+    except Exception:
+        await callback.message.answer(
+            f"✏️ <b>Изменение цены тарифа ID: {plan_id}</b>\n\n"
+            "Введите новую цену в рублях (только число, например: 299):"
+        )
+
+
+@router.message(AdminStates.waiting_price_amount)
+async def admin_price_set(message: Message, state: FSMContext) -> None:
+    """Сохранить новую цену тарифа."""
+    try:
+        new_price = float(message.text.strip().replace(",", "."))
+    except ValueError:
+        await message.reply("❌ Введите корректную цену (например: 299 или 299.99)")
+        return
+
+    data = await state.get_data()
+    plan_id = data.get("price_plan_id")
+    await state.clear()
+
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as client:
+            result = await client.update_subscription_plan(plan_id, {"price": new_price})
+        await message.answer(
+            f"✅ Цена тарифа ID {plan_id} обновлена: <b>{new_price} ₽</b>",
+            parse_mode="HTML",
+            reply_markup=get_admin_menu()
+        )
+    except Exception as e:
+        logger.error(f"Error updating plan price: {e}")
+        await message.answer(
+            f"❌ Ошибка обновления цены: {e}",
+            reply_markup=get_admin_menu()
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
+# КНОПКИ МЕНЮ — ЗАГРУЗКА ИЗОБРАЖЕНИЙ
+# ═══════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_btn_images")
+async def admin_btn_images_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """Показать список кнопок для загрузки изображений."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as client:
+            buttons = await client.get_bot_buttons()
+    except Exception as e:
+        buttons = []
+        logger.error(f"Error fetching buttons: {e}")
+
+    if not buttons:
+        text = "❌ Кнопки не найдены. Добавьте кнопки через веб-админку."
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_menu")]
+        ])
+        try:
+            await callback.message.edit_text(text, reply_markup=kb)
+        except Exception:
+            await callback.message.answer(text, reply_markup=kb)
+        return
+
+    lines = ["🖼 <b>Загрузка изображений для кнопок меню</b>\n"]
+    btns = []
+    for btn in buttons:
+        btn_id = btn.get("id", "?")
+        btn_text = btn.get("text", "—")
+        has_img = "✅" if btn.get("image_url") else "❌"
+        lines.append(f"{has_img} {btn_text} [ID: {btn_id}]")
+        btns.append([InlineKeyboardButton(
+            text=f"🖼 {btn_text}",
+            callback_data=f"admin_btn_img_{btn_id}"
+        )])
+    btns.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_menu")])
+
+    text = "\n".join(lines) + "\n\n✅ — есть изображение, ❌ — нет\nНажмите кнопку чтобы загрузить фото:"
+    kb = InlineKeyboardMarkup(inline_keyboard=btns)
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("admin_btn_img_"))
+async def admin_btn_img_select(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выбрать кнопку для загрузки изображения."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    btn_id = callback.data.replace("admin_btn_img_", "")
+    await state.update_data(btn_image_id=btn_id)
+    await state.set_state(AdminStates.waiting_btn_image_photo)
+
+    try:
+        await callback.message.edit_text(
+            f"🖼 <b>Загрузка изображения для кнопки ID: {btn_id}</b>\n\n"
+            "Отправьте фотографию (как фото, не как файл):",
+            parse_mode="HTML"
+        )
+    except Exception:
+        await callback.message.answer(
+            f"🖼 <b>Загрузка изображения для кнопки ID: {btn_id}</b>\n\n"
+            "Отправьте фотографию (как фото, не как файл):",
+            parse_mode="HTML"
+        )
+
+
+@router.message(AdminStates.waiting_btn_image_photo, F.photo)
+async def admin_btn_img_upload(message: Message, state: FSMContext) -> None:
+    """Принять фото и загрузить как изображение кнопки."""
+    data = await state.get_data()
+    btn_id = data.get("btn_image_id")
+    await state.clear()
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    photo = message.photo[-1]
+    file = await message.bot.get_file(photo.file_id)
+    ext = "jpg"
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    await message.bot.download_file(file.file_path, destination=filepath)
+    image_url = f"/static/uploads/{filename}"
+
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as client:
+            await client.update_bot_button(btn_id, {"image_url": image_url})
+        await message.answer(
+            f"✅ Изображение для кнопки ID {btn_id} сохранено!",
+            reply_markup=get_admin_menu()
+        )
+    except Exception as e:
+        logger.error(f"Error saving button image: {e}")
+        await message.answer(
+            f"❌ Ошибка сохранения: {e}",
+            reply_markup=get_admin_menu()
+        )
+
+
+@router.message(AdminStates.waiting_btn_image_photo)
+async def admin_btn_img_wrong(message: Message, state: FSMContext) -> None:
+    """Если прислали не фото."""
+    await message.reply("❌ Пожалуйста, отправьте фотографию (не файл).")
+
+
+# ═══════════════════════════════════════════════════════════════
+# ИНСТРУКЦИИ — ЗАГРУЗКА ИЗОБРАЖЕНИЙ К ШАГАМ
+# ═══════════════════════════════════════════════════════════════
+
+INSTRUCTION_DEVICES = {
+    "windows": "Windows",
+    "macos": "macOS",
+    "android": "Android",
+    "ios": "iOS",
+}
+
+
+@router.callback_query(F.data == "admin_instr_images")
+async def admin_instr_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выбор устройства для управления шагами инструкции."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    btns = []
+    for dev_key, dev_name in INSTRUCTION_DEVICES.items():
+        btns.append([InlineKeyboardButton(
+            text=f"📱 {dev_name}",
+            callback_data=f"admin_instr_dev_{dev_key}"
+        )])
+    btns.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_menu")])
+
+    try:
+        await callback.message.edit_text(
+            "📖 <b>Инструкции — загрузка изображений</b>\n\nВыберите устройство:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=btns)
+        )
+    except Exception:
+        await callback.message.answer(
+            "📖 <b>Инструкции — загрузка изображений</b>\n\nВыберите устройство:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=btns)
+        )
+
+
+@router.callback_query(F.data.startswith("admin_instr_dev_"))
+async def admin_instr_device(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выбор шага инструкции для устройства."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    device = callback.data.replace("admin_instr_dev_", "")
+    dev_name = INSTRUCTION_DEVICES.get(device, device)
+    await state.update_data(instr_device=device)
+
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as client:
+            steps = await client.get_instruction_steps(device)
+    except Exception as e:
+        steps = []
+        logger.error(f"Error fetching instruction steps: {e}")
+
+    if not steps:
+        text = f"❌ Шаги инструкции для {dev_name} не найдены."
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_instr_images")]
+        ])
+        try:
+            await callback.message.edit_text(text, reply_markup=kb)
+        except Exception:
+            await callback.message.answer(text, reply_markup=kb)
+        return
+
+    btns = []
+    for step in steps:
+        step_num = step.get("step_number", "?")
+        caption = step.get("caption", "")[:30]
+        has_img = "✅" if step.get("image_url") else "❌"
+        btns.append([InlineKeyboardButton(
+            text=f"{has_img} Шаг {step_num}: {caption}",
+            callback_data=f"admin_instr_step_{device}_{step_num}"
+        )])
+    btns.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_instr_images")])
+
+    text = f"📖 <b>Инструкция {dev_name}</b>\n\nВыберите шаг для загрузки изображения:\n✅ — есть фото, ❌ — нет"
+    try:
+        await callback.message.edit_text(
+            text, parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=btns)
+        )
+    except Exception:
+        await callback.message.answer(
+            text, parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=btns)
+        )
+
+
+@router.callback_query(F.data.startswith("admin_instr_step_"))
+async def admin_instr_step_select(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выбор шага инструкции для загрузки фото."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    parts = callback.data.replace("admin_instr_step_", "").split("_", 1)
+    device = parts[0]
+    step_num = parts[1] if len(parts) > 1 else "1"
+    dev_name = INSTRUCTION_DEVICES.get(device, device)
+
+    await state.update_data(instr_device=device, instr_step_num=step_num)
+    await state.set_state(AdminStates.waiting_instr_step_photo)
+
+    try:
+        await callback.message.edit_text(
+            f"📖 <b>{dev_name} — Шаг {step_num}</b>\n\n"
+            "Отправьте фотографию для этого шага (как фото, не как файл):",
+            parse_mode="HTML"
+        )
+    except Exception:
+        await callback.message.answer(
+            f"📖 <b>{dev_name} — Шаг {step_num}</b>\n\n"
+            "Отправьте фотографию для этого шага (как фото, не как файл):",
+            parse_mode="HTML"
+        )
+
+
+@router.message(AdminStates.waiting_instr_step_photo, F.photo)
+async def admin_instr_step_upload(message: Message, state: FSMContext) -> None:
+    """Принять фото и сохранить как изображение шага инструкции."""
+    data = await state.get_data()
+    device = data.get("instr_device")
+    step_num = data.get("instr_step_num")
+    await state.clear()
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    photo = message.photo[-1]
+    file = await message.bot.get_file(photo.file_id)
+    filename = f"{uuid.uuid4().hex}.jpg"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    await message.bot.download_file(file.file_path, destination=filepath)
+    image_url = f"/static/uploads/{filename}"
+
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as client:
+            await client.update_instruction_step(device, int(step_num), {"image_url": image_url})
+        await message.answer(
+            f"✅ Изображение для {INSTRUCTION_DEVICES.get(device, device)} шаг {step_num} сохранено!",
+            reply_markup=get_admin_menu()
+        )
+    except Exception as e:
+        logger.error(f"Error saving instruction image: {e}")
+        await message.answer(
+            f"❌ Ошибка сохранения: {e}",
+            reply_markup=get_admin_menu()
+        )
+
+
+@router.message(AdminStates.waiting_instr_step_photo)
+async def admin_instr_step_wrong(message: Message, state: FSMContext) -> None:
+    """Если прислали не фото."""
+    await message.reply("❌ Пожалуйста, отправьте фотографию (не файл).")

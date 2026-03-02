@@ -20,6 +20,13 @@ def get_admin_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="👥 Все пользователи", callback_data="admin_users"),
             ],
             [
+                InlineKeyboardButton(text="💲 Тарифы и цены", callback_data="admin_prices"),
+                InlineKeyboardButton(text="🖼 Кнопки меню", callback_data="admin_btn_images"),
+            ],
+            [
+                InlineKeyboardButton(text="📖 Инструкции", callback_data="admin_instr_images"),
+            ],
+            [
                 InlineKeyboardButton(text="🔙 Главное меню", callback_data="back_to_main"),
             ],
         ]
