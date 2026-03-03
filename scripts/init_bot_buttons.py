@@ -17,14 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 DEFAULT_BUTTONS = [
-    {"text": "🎁 Бесплатный доступ",  "callback_data": "free_trial",       "url": "", "row": 0},
-    {"text": "💸 Оплатить тариф",      "callback_data": "buy_subscription",  "url": "", "row": 1},
-    {"text": "👤 Личный кабинет",      "callback_data": "cabinet",           "url": "", "row": 2},
-    {"text": "🎁 Получить бесплатно",  "callback_data": "get_free",          "url": "", "row": 2},
-    {"text": "🔗 Реферальная система", "callback_data": "partner",           "url": "", "row": 3},
-    {"text": "⚙️ Инструкция",          "callback_data": "instructions",      "url": "", "row": 3},
-    {"text": "👨‍💻 Поддержка",            "callback_data": "support",           "url": "", "row": 4},
-    {"text": "📢 Наш канал",            "callback_data": "channel",           "url": "", "row": 4},
+    {"text": "🎁 Бесплатный доступ",        "callback_data": "free_trial",       "url": "", "row": 0},
+    {"text": "💸 Оплатить тариф",            "callback_data": "buy_subscription", "url": "", "row": 1},
+    {"text": "👤 Личный кабинет",            "callback_data": "cabinet",          "url": "", "row": 2},
+    {"text": "🔗 Реферальная система",       "callback_data": "partner",          "url": "", "row": 3},
+    {"text": "⚙️ Инструкция по подключению", "callback_data": "instructions",     "url": "", "row": 3},
+    {"text": "👨‍💻 Поддержка",                "callback_data": "support",          "url": "", "row": 4},
+    {"text": "📢 Наш канал",                 "callback_data": "channel",          "url": "", "row": 4},
 ]
 
 

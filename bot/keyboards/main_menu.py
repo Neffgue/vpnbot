@@ -19,17 +19,16 @@ def _build_default_buttons(show_free_trial: bool = True) -> list:
         ],
         [
             InlineKeyboardButton(text="👤 Личный кабинет", callback_data="cabinet"),
-            InlineKeyboardButton(text="🎁 Получить бесплатно", callback_data="get_free"),
         ],
         [
             InlineKeyboardButton(text="🔗 Реферальная система", callback_data="partner"),
             InlineKeyboardButton(text="⚙️ Инструкция по подключению", callback_data="instructions"),
         ],
         [
-            InlineKeyboardButton(text="👨‍💻 Поддержка", url="https://t.me/TechWizardsSupport"),
+            InlineKeyboardButton(text="👨‍💻 Поддержка", callback_data="support"),
         ],
         [
-            InlineKeyboardButton(text="📢 Наш канал", url="https://t.me/techwizardsru"),
+            InlineKeyboardButton(text="📢 Наш канал", callback_data="channel"),
         ],
     ]
     return buttons
