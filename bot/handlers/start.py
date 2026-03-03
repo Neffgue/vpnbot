@@ -16,19 +16,19 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
-def _resolve_media(path_or_url: str) -> "str | bytes | None":
+def _resolve_media(path_or_url: str):
     """
-    Преобразует путь к медиа в bytes (если это локальный файл) или URL (если https://).
+    Преобразует путь к медиа в BufferedInputFile (локальный файл) или строку URL (https://).
     Возвращает None если файл не найден или путь пустой.
     """
     import os
+    from aiogram.types import BufferedInputFile
     if not path_or_url:
         return None
-    # Уже полный URL — возвращаем как есть
+    # Уже полный URL — возвращаем как есть (строка)
     if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
         return path_or_url
-    # Локальный путь — читаем с диска
-    # Пробуем несколько вариантов пути
+    # Локальный путь — читаем с диска и оборачиваем в BufferedInputFile
     _project_root = "/home/neffgue313/vpnbot"
     candidates = [
         path_or_url,
@@ -41,7 +41,9 @@ def _resolve_media(path_or_url: str) -> "str | bytes | None":
         try:
             if os.path.isfile(candidate):
                 with open(candidate, "rb") as f:
-                    return f.read()
+                    data = f.read()
+                filename = os.path.basename(candidate)
+                return BufferedInputFile(data, filename=filename)
         except Exception:
             continue
     logger.warning(f"Media file not found: {path_or_url}")

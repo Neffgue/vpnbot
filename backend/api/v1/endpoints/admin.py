@@ -1683,13 +1683,20 @@ async def update_subscription_plan_price(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Обновить цену и параметры тарифного плана."""
+    """Обновить цену и параметры тарифного плана. Принимает UUID или name."""
     from backend.models.subscription import SubscriptionPlan
     try:
+        # Сначала ищем по id
         result = await db.execute(
             select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id)
         )
         plan = result.scalars().first()
+        # Если не нашли по id — ищем по name
+        if not plan:
+            result = await db.execute(
+                select(SubscriptionPlan).where(SubscriptionPlan.name == plan_id)
+            )
+            plan = result.scalars().first()
         if not plan:
             raise HTTPException(status_code=404, detail="Plan not found")
 

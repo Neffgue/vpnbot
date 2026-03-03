@@ -161,6 +161,13 @@ INSTRUCTIONS = {
 }
 
 
+def _is_valid_url(url: str) -> bool:
+    """Проверить что URL валидный для Telegram кнопки."""
+    if not url:
+        return False
+    return url.startswith("http://") or url.startswith("https://") or url.startswith("tg://")
+
+
 def _step_keyboard(
     device: str,
     step_idx: int,
@@ -176,14 +183,15 @@ def _step_keyboard(
     # Кнопки скачивания (для первого шага или если указано явно)
     if include_downloads and device in DOWNLOAD_BUTTONS:
         for text, url in DOWNLOAD_BUTTONS[device]:
-            buttons.append([InlineKeyboardButton(text=text, url=url)])
+            if _is_valid_url(url):
+                buttons.append([InlineKeyboardButton(text=text, url=url)])
 
-    # Кнопки-ссылки для шага
+    # Кнопки-ссылки для шага — строго валидируем URL
     if extra_buttons:
         for btn in extra_buttons:
-            text = (btn or {}).get("text")
-            url = (btn or {}).get("url")
-            if text and url:
+            text = (btn or {}).get("text", "").strip()
+            url = (btn or {}).get("url", "").strip()
+            if text and _is_valid_url(url):
                 buttons.append([InlineKeyboardButton(text=text, url=url)])
 
     # Навигация назад/вперёд
