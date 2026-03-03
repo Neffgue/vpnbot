@@ -1,74 +1,55 @@
-"""Channel subscription handler"""
+"""Channel handler — прямой редирект по URL из настроек БД."""
 
 import logging
-import os
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from bot.config import config
-from bot.keyboards.inline_kb import get_link_button
 from bot.utils.api_client import APIClient
+from bot.utils.media import resolve_media
 
 logger = logging.getLogger(__name__)
 
 router = Router()
 
-
-CHANNEL_URL = "https://t.me/techwizardsru"
-
-
-def _resolve_media(path_or_url: str):
-    """Reads media from disk or returns URL string."""
-    if not path_or_url:
-        return None
-    if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
-        return path_or_url
-    _project_root = "/home/neffgue313/vpnbot"
-    candidates = [
-        path_or_url,
-        os.path.join(_project_root, path_or_url.lstrip("/")),
-        os.path.join(_project_root, "static", "uploads", os.path.basename(path_or_url)),
-        "/app" + path_or_url,
-        os.path.join("/app", path_or_url.lstrip("/")),
-    ]
-    from aiogram.types import BufferedInputFile
-    for candidate in candidates:
-        try:
-            if os.path.isfile(candidate):
-                with open(candidate, "rb") as f:
-                    data = f.read()
-                return BufferedInputFile(data, filename=os.path.basename(candidate))
-        except Exception:
-            continue
-    logger.warning(f"Media file not found: {path_or_url}")
-    return None
+# Fallback — используется если API недоступен
+CHANNEL_URL_FALLBACK = "https://t.me/techwizardsru"
 
 
 @router.callback_query(F.data == "channel")
 async def channel_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle channel button — send URL button that opens channel."""
-    await callback.answer()
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    """Кнопка Наш канал — показывает URL-кнопку для перехода в канал.
 
-    # Получаем URL канала и обложку из настроек бота
-    channel_url = CHANNEL_URL
-    channel_text = "📢 <b>Наш канал</b>\n\nНажмите кнопку ниже:"
+    URL берётся из настроек БД (поле channel_url).
+    Если задана картинка (channel_image) — отправляем фото с caption.
+    Если картинки нет — отправляем текстовое сообщение.
+    Кнопки: [Перейти в канал (url)] [◀️ Назад]
+    """
+    await callback.answer()
+
+    channel_url = CHANNEL_URL_FALLBACK
+    channel_text = "📢 <b>Наш канал</b>\n\nПерейдите по ссылке ниже:"
     cover_media = None
+
     try:
         async with APIClient(config.api.base_url, config.api.api_key) as client:
             settings = await client.get_bot_settings()
-            channel_url = settings.get("channel_url") or CHANNEL_URL
-            raw_img = settings.get("channel_image") or ""
-            cover_media = _resolve_media(raw_img) if raw_img else None
+            if settings:
+                channel_url = settings.get("channel_url") or CHANNEL_URL_FALLBACK
+                raw_img = settings.get("channel_image") or ""
+                if raw_img:
+                    cover_media = resolve_media(raw_img)
+
             texts = await client.get_all_bot_texts()
-            channel_text = texts.get("channel_text") or channel_text
-    except Exception:
-        pass
+            if texts:
+                channel_text = texts.get("channel_text") or channel_text
+    except Exception as e:
+        logger.warning(f"Failed to load channel settings from API: {e}")
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📢 Перейти в канал", url=channel_url)],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")],
     ])
 
     if cover_media:

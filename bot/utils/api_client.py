@@ -97,6 +97,35 @@ class APIClient:
             }
         )
     
+    async def get_or_create_user(
+        self,
+        telegram_id: int,
+        username: Optional[str] = None,
+        full_name: Optional[str] = None,
+        ref_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Получить или создать пользователя по telegram_id.
+
+        Сначала пробуем GET /users/{id}, если 404 — создаём через POST /users/register.
+        """
+        try:
+            return await self.get(f"/users/{telegram_id}")
+        except Exception:
+            pass
+        try:
+            return await self.post(
+                "/users/register",
+                json={
+                    "telegram_id": telegram_id,
+                    "username": username or "",
+                    "first_name": full_name or "",
+                    "referral_code": ref_code,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"get_or_create_user failed for {telegram_id}: {e}")
+            return {}
+
     async def get_user(self, user_id: int) -> Dict[str, Any]:
         """Get user info"""
         try:
