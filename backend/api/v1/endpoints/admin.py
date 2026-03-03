@@ -1,9 +1,11 @@
 import logging
 import os
 import json
+import traceback
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form, BackgroundTasks
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
@@ -38,6 +40,34 @@ router = APIRouter()
 
 # Key used to store system-level settings (bot token, admin creds, etc.) in BotText table
 SYSTEM_SETTINGS_KEY = "system_settings_json"
+
+
+# ── Redis cache invalidation helper ─────────────────────────────────────────
+async def _invalidate_bot_cache(*keys: str) -> None:
+    """
+    Invalidate Redis cache keys used by the Telegram bot.
+    Called after any admin PUT/POST/DELETE that changes bot-visible data.
+    Silently ignores errors if Redis is unavailable.
+    """
+    redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    try:
+        import aioredis  # type: ignore
+        redis = await aioredis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+        try:
+            if keys:
+                await redis.delete(*keys)
+            else:
+                # Invalidate all known bot cache keys
+                await redis.delete(
+                    "bot:buttons",
+                    "bot:texts",
+                    "bot:settings",
+                    "bot:plans",
+                )
+        finally:
+            await redis.close()
+    except Exception as e:
+        logger.warning(f"Cache invalidation skipped (Redis unavailable?): {e}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -317,6 +347,7 @@ async def upsert_bot_text_by_key(
 
         await db.commit()
         await db.refresh(existing)
+        await _invalidate_bot_cache("bot:texts")
         logger.info(f"Bot text updated: {key}")
         return {"key": existing.key, "value": existing.value}
     except Exception as e:
@@ -339,6 +370,7 @@ async def delete_bot_text_by_key(
         if existing:
             await db.delete(existing)
             await db.commit()
+            await _invalidate_bot_cache("bot:texts")
         return {"success": True}
     except Exception as e:
         logger.error(f"Error deleting bot text {key}: {e}")
@@ -419,6 +451,7 @@ async def create_bot_button(
     btn = BotText(id=str(uuid4()), key=key, value=value, description="menu_button")
     db.add(btn)
     await db.commit()
+    await _invalidate_bot_cache("bot:buttons")
     return {"id": key, **btn_data}
 
 
@@ -449,6 +482,7 @@ async def update_bot_button(
     })
     btn.value = json.dumps(existing, ensure_ascii=False)
     await db.commit()
+    await _invalidate_bot_cache("bot:buttons")
     return {"success": True}
 
 
@@ -476,6 +510,7 @@ async def patch_bot_button(
             existing[field] = data[field]
     btn.value = json.dumps(existing, ensure_ascii=False)
     await db.commit()
+    await _invalidate_bot_cache("bot:buttons")
     logger.info(f"Bot button {btn_id} partially updated: {list(data.keys())}")
     return {"success": True, "id": btn_id, **existing}
 
@@ -493,6 +528,7 @@ async def delete_bot_button(
     if btn:
         await db.delete(btn)
         await db.commit()
+        await _invalidate_bot_cache("bot:buttons")
     return {"success": True}
 
 
@@ -539,6 +575,7 @@ async def save_bot_settings(
             db.add(row)
         await db.commit()
         await db.refresh(row)
+        await _invalidate_bot_cache("bot:settings")
         return data
     except Exception as e:
         logger.error(f"Error saving settings: {e}")
@@ -673,17 +710,62 @@ async def create_broadcast(
     return {"success": True, "sent_count": sent, "success_count": sent, "failed_count": failed}
 
 
-@router.post("/broadcast-image")
+async def _do_broadcast_image(
+    bot_token: str,
+    img_content: bytes,
+    img_filename: str,
+    img_content_type: str,
+    message: Optional[str],
+    telegram_ids: list,
+) -> None:
+    """Background task: send photo broadcast to all target users.
+    Runs fully asynchronously after HTTP response has been returned (202 Accepted).
+    """
+    import httpx as _httpx
+    import asyncio
+
+    tg_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+    sent = 0
+    failed = 0
+
+    async with _httpx.AsyncClient(timeout=30) as http:
+        for tg_id in telegram_ids:
+            if not tg_id:
+                continue
+            try:
+                files = {"photo": (img_filename, img_content, img_content_type)}
+                params = {"chat_id": tg_id, "parse_mode": "HTML"}
+                if message:
+                    params["caption"] = message
+                resp = await http.post(tg_url, data=params, files=files)
+                if resp.status_code == 200:
+                    sent += 1
+                else:
+                    failed += 1
+                    logger.warning(f"TG API error {resp.status_code} for {tg_id}: {resp.text[:200]}")
+            except Exception as e:
+                logger.error(f"Broadcast image send error to {tg_id}: {e}")
+                failed += 1
+            # Respect Telegram rate limit: ~30 msgs/sec
+            await asyncio.sleep(0.04)
+
+    logger.info(f"[background] Broadcast-image finished: {sent} sent, {failed} failed")
+
+
+@router.post("/broadcast-image", status_code=202)
 async def create_broadcast_image(
+    background_tasks: BackgroundTasks,
     image: UploadFile = File(...),
     message: Optional[str] = Form(default=None),
     target: str = Form(default="all"),
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Send broadcast with image to users via Telegram Bot API."""
-    import httpx as _httpx
-
+    """Accept broadcast-with-image request and immediately return 202 Accepted.
+    The actual sending is delegated to a BackgroundTask so the HTTP connection
+    is never held open during large broadcasts (prevents ERR_CONNECTION_RESET).
+    """
+    # Resolve bot token
     bot_token = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN", "")
     if not bot_token:
         try:
@@ -697,12 +779,14 @@ async def create_broadcast_image(
     if not bot_token:
         raise HTTPException(status_code=400, detail="BOT_TOKEN not configured")
 
-    # Read image content
+    # Read & validate image NOW (before response is sent)
     img_content = await image.read()
     if len(img_content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image too large (max 10MB)")
+    img_filename = image.filename or "image.jpg"
+    img_content_type = image.content_type or "image/jpeg"
 
-    # Get target users
+    # Collect target user telegram_ids from DB
     from backend.models.user import User
     from backend.models.subscription import Subscription
     from datetime import timezone as _tz
@@ -710,48 +794,49 @@ async def create_broadcast_image(
     if target == "active":
         now = datetime.now(_tz.utc)
         stmt = (
-            select(User)
+            select(User.telegram_id)
             .join(Subscription, Subscription.user_id == User.id)
             .where(Subscription.is_active == True, Subscription.expires_at > now)
         )
     elif target == "expired":
         stmt = (
-            select(User)
+            select(User.telegram_id)
             .join(Subscription, Subscription.user_id == User.id)
             .where(Subscription.is_active == False)
         )
     elif target == "trial":
-        stmt = select(User).where(User.free_trial_used == True)
+        stmt = select(User.telegram_id).where(User.free_trial_used == True)
     else:
-        stmt = select(User).where(User.is_banned == False)
+        stmt = select(User.telegram_id).where(User.is_banned == False)
 
     result = await db.execute(stmt)
-    users = result.scalars().all()
+    telegram_ids = [row[0] for row in result.fetchall() if row[0]]
 
-    sent = 0
-    failed = 0
-    tg_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+    logger.info(
+        f"Broadcast-image queued: target={target!r}, users={len(telegram_ids)}, "
+        f"message_len={len(message or '')}"
+    )
 
-    async with _httpx.AsyncClient(timeout=60) as http:
-        for user in users:
-            if not user.telegram_id:
-                continue
-            try:
-                files = {"photo": (image.filename or "image.jpg", img_content, image.content_type or "image/jpeg")}
-                params = {"chat_id": user.telegram_id, "parse_mode": "HTML"}
-                if message:
-                    params["caption"] = message
-                resp = await http.post(tg_url, data=params, files=files)
-                if resp.status_code == 200:
-                    sent += 1
-                else:
-                    failed += 1
-            except Exception as e:
-                logger.error(f"Broadcast image send error to {user.telegram_id}: {e}")
-                failed += 1
+    # Enqueue background task — response is returned immediately after this
+    background_tasks.add_task(
+        _do_broadcast_image,
+        bot_token,
+        img_content,
+        img_filename,
+        img_content_type,
+        message,
+        telegram_ids,
+    )
 
-    logger.info(f"Broadcast-image sent: {sent} ok, {failed} failed")
-    return {"success": True, "sent_count": sent, "success_count": sent, "failed_count": failed}
+    return JSONResponse(
+        status_code=202,
+        content={
+            "success": True,
+            "status": "accepted",
+            "queued_users": len(telegram_ids),
+            "message": f"Рассылка принята в обработку. Будет отправлена {len(telegram_ids)} пользователям.",
+        },
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1418,12 +1503,13 @@ async def update_plan_price(
             plan.price_rub = plan_data.price_rub
         await db.commit()
         await db.refresh(plan)
+        await _invalidate_bot_cache("bot:plans")
         logger.info(f"Plan price {plan_id} updated")
         return plan
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating plan: {e}")
+        logger.error(f"Error updating plan: {e}", exc_info=True)
         await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to update plan price")
 
@@ -1447,10 +1533,13 @@ async def delete_plan_price(
 
         await db.delete(plan)
         await db.commit()
+        await _invalidate_bot_cache("bot:plans")
         logger.info(f"Plan price {plan_id} deleted")
         return {"detail": "Plan deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error deleting plan: {e}")
+        logger.error(f"Error deleting plan: {e}", exc_info=True)
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

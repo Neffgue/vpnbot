@@ -83,6 +83,7 @@ services:
       LOG_LEVEL: INFO
     volumes:
       - ./logs:/app/logs
+      - static_uploads:/app/static
     networks:
       - vpn_network
     command: /app/entrypoint.sh
@@ -119,6 +120,7 @@ services:
       LOG_LEVEL: INFO
     volumes:
       - ./logs:/app/logs
+      - static_uploads:/app/static
     networks:
       - vpn_network
     deploy:
@@ -233,6 +235,7 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/certs:/etc/letsencrypt:ro
       - ./nginx/www:/var/www/certbot:ro
+      - static_uploads:/app/static:ro
     ports:
       - "80:80"
       - "443:443"
@@ -250,6 +253,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  static_uploads:
 
 networks:
   vpn_network:
