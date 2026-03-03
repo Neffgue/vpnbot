@@ -20,6 +20,9 @@ python-multipart==0.0.20
 # HTTP Client
 httpx==0.28.1
 
+# Redis (async cache invalidation + rate limiting)
+redis==5.0.1
+
 # Config
 pydantic==2.10.4
 pydantic-settings==2.7.0

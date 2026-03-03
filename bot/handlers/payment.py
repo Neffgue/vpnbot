@@ -68,19 +68,29 @@ async def _fetch_plans(api: APIClient) -> list:
 
 
 def _group_plans_by_name(plans: list) -> dict:
-    """Сгруппировать тарифы по plan_name → список периодов."""
+    """Сгруппировать тарифы по plan_name → список периодов.
+
+    Поддерживает оба варианта имени поля цены:
+    - price_rub (схема БД PlanPrice)
+    - price (общий вариант)
+    """
     grouped: dict = {}
     for plan in plans:
         key = plan.get("plan_name") or plan.get("id") or "solo"
         if key not in grouped:
             grouped[key] = {
                 "key": key,
-                "name": plan.get("name", key),
+                "name": plan.get("name", key.capitalize()),
                 "devices": plan.get("devices", plan.get("device_limit", 1)),
                 "periods": {},
             }
         days = int(plan.get("period_days", 30))
-        price = float(plan.get("price", 0))
+        # Поддержка обоих полей: price_rub (из БД) и price (общий)
+        price = float(
+            plan.get("price_rub")
+            or plan.get("price")
+            or 0
+        )
         grouped[key]["periods"][days] = price
     return grouped
 

@@ -48,24 +48,28 @@ async def _invalidate_bot_cache(*keys: str) -> None:
     Invalidate Redis cache keys used by the Telegram bot.
     Called after any admin PUT/POST/DELETE that changes bot-visible data.
     Silently ignores errors if Redis is unavailable.
+    Uses redis-py async client (redis>=4.2) — compatible with modern versions.
     """
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    cache_keys = list(keys) if keys else ["bot:buttons", "bot:texts", "bot:settings", "bot:plans"]
     try:
-        import aioredis  # type: ignore
-        redis = await aioredis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+        from redis.asyncio import from_url as redis_from_url  # redis>=4.2
+        redis = await redis_from_url(redis_url, decode_responses=True)
         try:
-            if keys:
-                await redis.delete(*keys)
-            else:
-                # Invalidate all known bot cache keys
-                await redis.delete(
-                    "bot:buttons",
-                    "bot:texts",
-                    "bot:settings",
-                    "bot:plans",
-                )
+            if cache_keys:
+                await redis.delete(*cache_keys)
+                logger.debug(f"Cache invalidated: {cache_keys}")
         finally:
+            await redis.aclose()
+    except ImportError:
+        # redis-py не установлен — пробуем aioredis v2
+        try:
+            import aioredis  # type: ignore
+            redis = aioredis.from_url(redis_url, decode_responses=True)
+            await redis.delete(*cache_keys)
             await redis.close()
+        except Exception as e2:
+            logger.warning(f"Cache invalidation skipped (no redis client): {e2}")
     except Exception as e:
         logger.warning(f"Cache invalidation skipped (Redis unavailable?): {e}")
 
