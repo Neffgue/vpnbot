@@ -207,7 +207,7 @@ async def update_admin_plan(
             await db.refresh(plan)
             return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
         if "plan_name" in data:
-            plan.plan_name = data["plan_name"]
+            plan.plan_name = str(data["plan_name"])
         if "period_days" in data:
             plan.period_days = int(data["period_days"])
         if "price_rub" in data:
@@ -215,12 +215,18 @@ async def update_admin_plan(
         if "price" in data:
             plan.price_rub = float(data["price"])
         await db.commit()
-        return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
+        await db.refresh(plan)
+        return {
+            "id": str(plan.id),
+            "plan_name": str(plan.plan_name),
+            "period_days": int(plan.period_days),
+            "price_rub": float(plan.price_rub),
+        }
     except HTTPException:
         raise
     except Exception as e:
         await db.rollback()
-        logger.error(f"update_admin_plan error: {e}")
+        logger.error(f"update_admin_plan error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
