@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
+import { Save, RefreshCw, Eye, EyeOff, Plus, Trash2, Image, Upload } from 'lucide-react'
 import api from '../api/client'
 import Toast from '../components/Toast'
 
 const DEFAULT_KEYS = [
-  { key: 'welcome', label: 'Приветствие (/start)' },
+  { key: 'welcome', label: 'Приветствие (/start)', coverKey: 'cover_start' },
   { key: 'free_trial_success', label: 'Успешный пробный доступ' },
   { key: 'free_trial_used', label: 'Пробный период уже использован' },
   { key: 'subscription_required', label: 'Требуется подписка' },
-  { key: 'referral_header', label: 'Заголовок реферальной программы' },
-  { key: 'cabinet_header', label: 'Заголовок личного кабинета' },
-  { key: 'support_text', label: 'Текст поддержки' },
-  { key: 'channel_text', label: 'Текст канала' },
+  { key: 'referral_header', label: 'Заголовок реферальной программы', coverKey: 'cover_referral' },
+  { key: 'cabinet_header', label: 'Заголовок личного кабинета', coverKey: 'cover_cabinet' },
+  { key: 'support_text', label: 'Текст поддержки', coverKey: 'cover_support' },
+  { key: 'channel_text', label: 'Текст канала', coverKey: 'cover_channel' },
   { key: 'payment_success', label: 'Успешная оплата' },
   { key: 'payment_failed', label: 'Ошибка оплаты' },
   { key: 'subscription_expiring_24h', label: 'Уведомление за 24 часа до конца' },
@@ -22,6 +22,15 @@ const DEFAULT_KEYS = [
   { key: 'subscription_expired_3h', label: 'Истекла 3 часа назад' },
 ]
 
+// Sections that have cover image support (stored in bot_settings)
+const COVER_SETTINGS_MAP = {
+  cover_start: 'welcome_image',
+  cover_cabinet: 'cabinet_image',
+  cover_referral: 'referral_image',
+  cover_support: 'support_image',
+  cover_channel: 'channel_image',
+}
+
 export default function BotTexts() {
   const qc = useQueryClient()
   const [selected, setSelected] = useState(DEFAULT_KEYS[0].key)
@@ -30,10 +39,18 @@ export default function BotTexts() {
   const [toast, setToast] = useState(null)
   const [newKey, setNewKey] = useState('')
   const [showNewKey, setShowNewKey] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const fileInputRef = useRef(null)
 
   const { data: texts = {}, isLoading } = useQuery({
     queryKey: ['bot-texts'],
     queryFn: () => api.get('/admin/bot-texts').then(r => r.data),
+    staleTime: 10000,
+  })
+
+  const { data: botSettings = {} } = useQuery({
+    queryKey: ['bot-settings'],
+    queryFn: () => api.get('/admin/settings').then(r => r.data),
     staleTime: 10000,
   })
 
@@ -54,11 +71,59 @@ export default function BotTexts() {
     },
   })
 
+  const saveSettingsMutation = useMutation({
+    mutationFn: (data) => api.put('/admin/settings', data),
+    onSuccess: () => {
+      qc.invalidateQueries(['bot-settings'])
+      setToast({ type: 'success', message: 'Изображение-обложка сохранено!' })
+    },
+    onError: () => setToast({ type: 'error', message: 'Ошибка сохранения обложки' }),
+  })
+
   useEffect(() => {
     if (texts[selected] !== undefined) {
       setEditValue(texts[selected])
     }
   }, [selected, texts])
+
+  // Get current cover image URL for the selected section
+  const selectedKeyDef = DEFAULT_KEYS.find(k => k.key === selected)
+  const coverKey = selectedKeyDef?.coverKey
+  const settingsFieldName = coverKey ? COVER_SETTINGS_MAP[coverKey] : null
+  const currentCoverUrl = settingsFieldName ? (botSettings[settingsFieldName] || '') : ''
+
+  async function handleCoverUpload(file) {
+    if (!settingsFieldName) return
+    setUploadingCover(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await api.post('/admin/upload-image', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      let imageUrl = res.data.url
+      if (imageUrl && imageUrl.startsWith('/')) {
+        const apiBase = import.meta.env.VITE_API_URL || ''
+        const origin = apiBase.replace('/api/v1', '').replace('/api', '')
+        imageUrl = origin + imageUrl
+      }
+      // Merge into existing settings
+      const updatedSettings = { ...botSettings, [settingsFieldName]: imageUrl }
+      saveSettingsMutation.mutate(updatedSettings)
+    } catch (e) {
+      console.error('Cover upload error:', e)
+      setToast({ type: 'error', message: 'Ошибка загрузки изображения' })
+    } finally {
+      setUploadingCover(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  function handleRemoveCover() {
+    if (!settingsFieldName) return
+    const updatedSettings = { ...botSettings, [settingsFieldName]: '' }
+    saveSettingsMutation.mutate(updatedSettings)
+  }
 
   const allKeys = [
     ...DEFAULT_KEYS,
@@ -159,9 +224,70 @@ export default function BotTexts() {
           </div>
         </div>
 
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-4">
+          {/* Cover image section — only for menu sections that support it */}
+          {coverKey && (
+            <div className="border border-blue-100 rounded-xl p-4 bg-blue-50/40">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Image size={16} className="text-blue-500" />
+                  <span className="text-sm font-semibold text-gray-700">Изображение-обложка</span>
+                </div>
+                <span className="text-xs text-gray-400">Отображается над текстом в боте</span>
+              </div>
+
+              {currentCoverUrl ? (
+                <div className="flex items-start gap-4">
+                  <img
+                    src={currentCoverUrl}
+                    alt="Обложка"
+                    className="h-28 rounded-lg border border-gray-200 object-cover shadow-sm"
+                    onError={e => { e.target.style.display = 'none' }}
+                  />
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg px-3 py-1.5 bg-white hover:bg-blue-50 transition-colors">
+                      <Upload size={14} />
+                      {uploadingCover ? 'Загрузка...' : 'Заменить'}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingCover}
+                        onChange={e => e.target.files?.[0] && handleCoverUpload(e.target.files[0])}
+                      />
+                    </label>
+                    <button
+                      onClick={handleRemoveCover}
+                      className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-3 py-1.5 bg-white hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={14} /> Удалить
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-2 cursor-pointer border-2 border-dashed border-blue-200 rounded-xl p-6 hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                  {uploadingCover ? (
+                    <><RefreshCw size={20} className="animate-spin text-blue-400" /><span className="text-sm text-blue-500">Загрузка...</span></>
+                  ) : (
+                    <><Upload size={20} className="text-blue-400" /><span className="text-sm text-blue-500 font-medium">Загрузить обложку</span><span className="text-xs text-gray-400">JPG, PNG, GIF, WebP до 5 МБ</span></>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingCover}
+                    onChange={e => e.target.files?.[0] && handleCoverUpload(e.target.files[0])}
+                  />
+                </label>
+              )}
+            </div>
+          )}
+
+          {/* Text editor */}
           {preview ? (
-            <div className="h-full bg-gray-50 rounded-lg p-4 overflow-y-auto">
+            <div className="flex-1 bg-gray-50 rounded-lg p-4 overflow-y-auto min-h-40">
               <div className="text-xs text-gray-400 mb-3 font-medium uppercase tracking-wide">Превью (Telegram HTML)</div>
               <div
                 className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap"
@@ -169,12 +295,12 @@ export default function BotTexts() {
               />
             </div>
           ) : (
-            <div className="h-full flex flex-col gap-2">
+            <div className="flex-1 flex flex-col gap-2 min-h-40">
               <div className="text-xs text-gray-400">
                 Поддерживаются HTML-теги: &lt;b&gt;жирный&lt;/b&gt;, &lt;i&gt;курсив&lt;/i&gt;, &lt;code&gt;код&lt;/code&gt;, \n — перенос строки
               </div>
               <textarea
-                className="flex-1 border border-gray-200 rounded-lg p-3 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 border border-gray-200 rounded-lg p-3 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-32"
                 value={editValue}
                 onChange={e => setEditValue(e.target.value)}
                 placeholder="Введите текст..."

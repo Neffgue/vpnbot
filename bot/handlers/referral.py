@@ -14,12 +14,38 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-import os
 BOT_USERNAME = (
     os.getenv("BOT_USERNAME")
     or os.getenv("TELEGRAM_BOT_USERNAME")
     or "vpnsolid_bot"
 )
+
+
+def _resolve_media(path_or_url: str):
+    """Reads media from disk or returns URL string."""
+    if not path_or_url:
+        return None
+    if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
+        return path_or_url
+    _project_root = "/home/neffgue313/vpnbot"
+    candidates = [
+        path_or_url,
+        os.path.join(_project_root, path_or_url.lstrip("/")),
+        os.path.join(_project_root, "static", "uploads", os.path.basename(path_or_url)),
+        "/app" + path_or_url,
+        os.path.join("/app", path_or_url.lstrip("/")),
+    ]
+    from aiogram.types import BufferedInputFile
+    for candidate in candidates:
+        try:
+            if os.path.isfile(candidate):
+                with open(candidate, "rb") as f:
+                    data = f.read()
+                return BufferedInputFile(data, filename=os.path.basename(candidate))
+        except Exception:
+            continue
+    logger.warning(f"Media file not found: {path_or_url}")
+    return None
 
 
 # ─── 🎁 ПОЛУЧИТЬ БЕСПЛАТНО (реферальная программа с бонусными днями) ─────────
@@ -52,6 +78,15 @@ async def get_free_handler(callback: CallbackQuery, state: FSMContext) -> None:
 
             ref_link = referral_data.get("referral_link", f"https://t.me/{BOT_USERNAME}?start=ref{user_id}")
             referrals_count = referral_data.get("referrals_count", 0)
+
+            # Загружаем обложку из настроек
+            cover_media = None
+            try:
+                settings = await client.get_bot_settings()
+                raw_img = settings.get("referral_image") or ""
+                cover_media = _resolve_media(raw_img) if raw_img else None
+            except Exception:
+                pass
 
             # Определяем уровень
             if referrals_count >= 10:
@@ -89,19 +124,32 @@ async def get_free_handler(callback: CallbackQuery, state: FSMContext) -> None:
                 "😉 Делитесь ссылкой и наслаждайтесь лучшим VPN бесплатно! 🚀"
             )
 
+            kb = _get_free_keyboard(ref_link)
+
+            if cover_media:
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass
+                try:
+                    await callback.bot.send_photo(
+                        chat_id=user_id,
+                        photo=cover_media,
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=kb,
+                    )
+                    return
+                except Exception as e:
+                    logger.error(f"Failed to send referral cover photo: {e}")
+
             try:
                 await callback.message.edit_text(
-                    text,
-                    parse_mode="HTML",
-                    reply_markup=_get_free_keyboard(ref_link),
-                    disable_web_page_preview=True,
+                    text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True,
                 )
             except Exception:
                 await callback.message.answer(
-                    text,
-                    parse_mode="HTML",
-                    reply_markup=_get_free_keyboard(ref_link),
-                    disable_web_page_preview=True,
+                    text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True,
                 )
 
     except Exception as e:
