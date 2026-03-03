@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
-from sqlalchemy import Column, DateTime, Integer, Numeric, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, Text, UniqueConstraint, func
 from backend.database import Base
 
 
@@ -14,9 +14,14 @@ class PlanPrice(Base):
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    plan_name = Column(String(50), nullable=False)  # Solo, Family
-    period_days = Column(Integer, nullable=False)  # 7, 30, 90, 180, 365
+    plan_name = Column(String(50), nullable=False)       # solo, family — технический ключ
+    name = Column(String(100), nullable=True)            # Отображаемое имя: "👤 Соло", "👨‍👩‍👧 Семейный"
+    period_days = Column(Integer, nullable=False)        # 7, 30, 90, 180, 365
     price_rub = Column(Numeric(12, 2), nullable=False)
+    device_limit = Column(Integer, nullable=True, default=1)  # Количество устройств
+    image_url = Column(String(500), nullable=True)       # URL картинки тарифа (из upload-image)
+    description = Column(Text, nullable=True)            # Описание тарифа
+    is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

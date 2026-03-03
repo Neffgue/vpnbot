@@ -11,6 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+
+async def _invalidate_plans_cache() -> None:
+    """Инвалидация кэша тарифов в Redis после изменений через веб-панель."""
+    redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    try:
+        from redis.asyncio import from_url as redis_from_url
+        r = await redis_from_url(redis_url, decode_responses=True)
+        try:
+            await r.delete("bot:plans", "subscriptions:plans")
+        finally:
+            await r.aclose()
+    except Exception as e:
+        logger.warning(f"Plans cache invalidation skipped: {e}")
+
 api_router = APIRouter(prefix="/api/v1")
 
 # Include all endpoint routers
@@ -105,23 +119,36 @@ async def auth_logout_compat(
 async def subscriptions_plans_compat(
     db: AsyncSession = Depends(get_db),
 ):
-    """Public alias: GET /subscriptions/plans — returns plan prices list."""
+    """Public alias: GET /subscriptions/plans — returns full plan prices list.
+    Включает image_url, name, device_limit для синхронизации с ботом.
+    """
     from backend.models.config import PlanPrice
     from sqlalchemy import select
     try:
-        result = await db.execute(select(PlanPrice).order_by(PlanPrice.plan_name, PlanPrice.period_days))
+        result = await db.execute(
+            select(PlanPrice)
+            .where(PlanPrice.is_active == True)
+            .order_by(PlanPrice.plan_name, PlanPrice.period_days)
+        )
         plans = result.scalars().all()
         return [
             {
                 "id": str(p.id),
                 "plan_name": p.plan_name,
-                "period_days": p.period_days,
+                "name": p.name or p.plan_name,
+                "period_days": int(p.period_days),
                 "price_rub": float(p.price_rub),
+                "price": float(p.price_rub),
+                "device_limit": int(p.device_limit or 1),
+                "devices": int(p.device_limit or 1),
+                "image_url": p.image_url or "",
+                "description": p.description or "",
+                "is_active": bool(p.is_active),
             }
             for p in plans
         ]
     except Exception as e:
-        logger.error(f"subscriptions_plans_compat error: {e}")
+        logger.error(f"subscriptions_plans_compat error: {e}", exc_info=True)
         return []
 
 
@@ -130,7 +157,7 @@ async def get_admin_plans(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Alias: GET /admin/plans — returns plan prices for PlanPrices.jsx."""
+    """Alias: GET /admin/plans — returns plan prices for PlanPrices.jsx (all fields)."""
     from backend.models.config import PlanPrice
     from sqlalchemy import select
     try:
@@ -140,13 +167,20 @@ async def get_admin_plans(
             {
                 "id": str(p.id),
                 "plan_name": p.plan_name,
-                "period_days": p.period_days,
+                "name": p.name or p.plan_name,
+                "period_days": int(p.period_days),
                 "price_rub": float(p.price_rub),
+                "price": float(p.price_rub),
+                "device_limit": int(p.device_limit or 1),
+                "devices": int(p.device_limit or 1),
+                "image_url": p.image_url or "",
+                "description": p.description or "",
+                "is_active": bool(p.is_active) if p.is_active is not None else True,
             }
             for p in plans
         ]
     except Exception as e:
-        logger.error(f"get_admin_plans error: {e}")
+        logger.error(f"get_admin_plans error: {e}", exc_info=True)
         return []
 
 
@@ -208,19 +242,39 @@ async def update_admin_plan(
             return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
         if "plan_name" in data:
             plan.plan_name = str(data["plan_name"])
+        if "name" in data:
+            plan.name = str(data["name"])
         if "period_days" in data:
             plan.period_days = int(data["period_days"])
         if "price_rub" in data:
             plan.price_rub = float(data["price_rub"])
         if "price" in data:
             plan.price_rub = float(data["price"])
+        if "device_limit" in data:
+            plan.device_limit = int(data["device_limit"])
+        if "devices" in data:
+            plan.device_limit = int(data["devices"])
+        if "image_url" in data:
+            plan.image_url = str(data["image_url"]) if data["image_url"] else None
+        if "description" in data:
+            plan.description = str(data["description"]) if data["description"] else None
+        if "is_active" in data:
+            plan.is_active = bool(data["is_active"])
         await db.commit()
         await db.refresh(plan)
+        await _invalidate_plans_cache()
         return {
             "id": str(plan.id),
             "plan_name": str(plan.plan_name),
+            "name": plan.name or plan.plan_name,
             "period_days": int(plan.period_days),
             "price_rub": float(plan.price_rub),
+            "price": float(plan.price_rub),
+            "device_limit": int(plan.device_limit or 1),
+            "devices": int(plan.device_limit or 1),
+            "image_url": plan.image_url or "",
+            "description": plan.description or "",
+            "is_active": bool(plan.is_active),
         }
     except HTTPException:
         raise
