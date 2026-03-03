@@ -1,46 +1,72 @@
-ssh1 neffgue313       
-neffgue313@ssh1's password: 
-Linux ssh1 6.12.49-alwaysdata #1 SMP PREEMPT_DYNAMIC Mon Sep 29 14:04:11 UTC 2025 x86_64
-
-  * Any process using too much CPU, RAM or IO will get killed
-  * Any process running for too long (e.g. days) will get killed
-  * If you want to have cron jobs, use scheduled tasks: https://help.alwaysdata.com/en/tasks/
-  * If you want to have processes running 24/7, use services: https://help.alwaysdata.com/en/services/
-
-Last login: Mon Mar  2 22:36:00 2026 from 2a00:b6e0:1:50:2::1
-neffgue313@ssh1:~$ cd ~/vpnbot && git pull origin master && ~/vpnbot/venv/bin/pip install aiogram aiohttp --upgrade && 
-~/vpnbot/venv/bin/python -c "import aiogram; print('OK:', aiogram.__version__)"
-Username for 'https://github.com': Neffgue
-Password for 'https://Neffgue@github.com': 
-From https://github.com/Neffgue/vpnbot
- * branch            master     -> FETCH_HEAD
-Already up to date.
-Requirement already satisfied: aiogram in ./venv/lib/python3.11/site-packages (3.25.0)
-Requirement already satisfied: aiohttp in ./venv/lib/python3.11/site-packages (3.10.11)
-Collecting aiohttp
-  Downloading aiohttp-3.13.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.1 kB)
-Requirement already satisfied: aiofiles<26.0,>=23.2.1 in ./venv/lib/python3.11/site-packages (from aiogram) (25.1.0)
-Requirement already satisfied: certifi>=2023.7.22 in ./venv/lib/python3.11/site-packages (from aiogram) (2026.2.25)
-Requirement already satisfied: magic-filter<1.1,>=1.0.12 in ./venv/lib/python3.11/site-packages (from aiogram) (1.0.12)
-Requirement already satisfied: pydantic<2.13,>=2.4.1 in ./venv/lib/python3.11/site-packages (from aiogram) (2.10.4)
-Requirement already satisfied: typing-extensions<=5.0,>=4.7.0 in ./venv/lib/python3.11/site-packages (from aiogram) (4.15.0)
-Requirement already satisfied: aiohappyeyeballs>=2.5.0 in ./venv/lib/python3.11/site-packages (from aiohttp) (2.6.1)
-Requirement already satisfied: aiosignal>=1.4.0 in ./venv/lib/python3.11/site-packages (from aiohttp) (1.4.0)
-Requirement already satisfied: attrs>=17.3.0 in ./venv/lib/python3.11/site-packages (from aiohttp) (25.4.0)
-Requirement already satisfied: frozenlist>=1.1.1 in ./venv/lib/python3.11/site-packages (from aiohttp) (1.8.0)
-Requirement already satisfied: multidict<7.0,>=4.5 in ./venv/lib/python3.11/site-packages (from aiohttp) (6.7.1)
-Requirement already satisfied: propcache>=0.2.0 in ./venv/lib/python3.11/site-packages (from aiohttp) (0.4.1)
-Requirement already satisfied: yarl<2.0,>=1.17.0 in ./venv/lib/python3.11/site-packages (from aiohttp) (1.23.0)
-Requirement already satisfied: annotated-types>=0.6.0 in ./venv/lib/python3.11/site-packages (from pydantic<2.13,>=2.4.1->aiogram) (0.7.0)
-Requirement already satisfied: pydantic-core==2.27.2 in ./venv/lib/python3.11/site-packages (from pydantic<2.13,>=2.4.1->aiogram) (2.27.2)
-Requirement already satisfied: idna>=2.0 in ./venv/lib/python3.11/site-packages (from yarl<2.0,>=1.17.0->aiohttp) (3.11)
-Downloading aiohttp-3.13.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.7 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 29.3 MB/s  0:00:00
-Installing collected packages: aiohttp
-  Attempting uninstall: aiohttp
-    Found existing installation: aiohttp 3.10.11
-    Uninstalling aiohttp-3.10.11:
-      Successfully uninstalled aiohttp-3.10.11
-Successfully installed aiohttp-3.13.3
-OK: 3.25.0
-neffgue313@ssh1:~/vpnbot$
+[03/Mar/2026:11:40:15 +0100] [2885094] neffgue313 - service: 21258 restart requested
+[03/Mar/2026:11:40:16 +0100] [2885094] STDERR: 2026-03-03 11:40:16,403 - aiogram.dispatcher - WARNING - Received SIGTERM signal
+[03/Mar/2026:11:40:16 +0100] [2885094] STDERR: 2026-03-03 11:40:16,403 - aiogram.dispatcher - INFO - Polling stopped for bot @Testikmeow_bot id=8798734592 - 'VPN_Test'
+[03/Mar/2026:11:40:16 +0100] [2885094] STDERR: 2026-03-03 11:40:16,404 - aiogram.dispatcher - INFO - Polling stopped
+[03/Mar/2026:11:40:16 +0100] [2885094] STDERR: 2026-03-03 11:40:16,654 - __main__ - INFO - Bot stopped
+[03/Mar/2026:11:40:17 +0100] [2885094] neffgue313 - service: 21258 finished after 30586.872 seconds, exit code: 0 (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 2885094)
+[03/Mar/2026:11:40:17 +0100] [3148404] neffgue313 - service: 21258 started (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148404)
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR: Traceback (most recent call last):
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:   File "<frozen runpy>", line 198, in _run_module_as_main
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:   File "<frozen runpy>", line 88, in _run_code
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:   File "/home/neffgue313/vpnbot/bot/main.py", line 12, in <module>
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/__init__.py", line 3, in <module>
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/referral.py", line 18, in <module>
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:     os.getenv("BOT_USERNAME")
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR:     ^^
+[03/Mar/2026:11:40:21 +0100] [3148404] STDERR: NameError: name 'os' is not defined
+[03/Mar/2026:11:40:22 +0100] [3148404] neffgue313 - service: 21258 finished after 4.636 seconds, exit code: 1 (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148404)
+[03/Mar/2026:11:40:23 +0100] [3148416] neffgue313 - service: 21258 started (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148416)
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR: Traceback (most recent call last):
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:   File "<frozen runpy>", line 198, in _run_module_as_main
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:   File "<frozen runpy>", line 88, in _run_code
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:   File "/home/neffgue313/vpnbot/bot/main.py", line 12, in <module>
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/__init__.py", line 3, in <module>
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/referral.py", line 18, in <module>
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:     os.getenv("BOT_USERNAME")
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR:     ^^
+[03/Mar/2026:11:40:26 +0100] [3148416] STDERR: NameError: name 'os' is not defined
+[03/Mar/2026:11:40:27 +0100] [3148416] neffgue313 - service: 21258 finished after 4.271 seconds, exit code: 1 (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148416)
+[03/Mar/2026:11:40:28 +0100] [3148426] neffgue313 - service: 21258 started (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148426)
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR: Traceback (most recent call last):
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:   File "<frozen runpy>", line 198, in _run_module_as_main
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:   File "<frozen runpy>", line 88, in _run_code
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:   File "/home/neffgue313/vpnbot/bot/main.py", line 12, in <module>
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/__init__.py", line 3, in <module>
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/referral.py", line 18, in <module>
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:     os.getenv("BOT_USERNAME")
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR:     ^^
+[03/Mar/2026:11:40:33 +0100] [3148426] STDERR: NameError: name 'os' is not defined
+[03/Mar/2026:11:40:33 +0100] [3148426] neffgue313 - service: 21258 finished after 5.084 seconds, exit code: 1 (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148426)
+[03/Mar/2026:11:40:34 +0100] [3148459] neffgue313 - service: 21258 started (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148459)
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR: Traceback (most recent call last):
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:   File "<frozen runpy>", line 198, in _run_module_as_main
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:   File "<frozen runpy>", line 88, in _run_code
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:   File "/home/neffgue313/vpnbot/bot/main.py", line 12, in <module>
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/__init__.py", line 3, in <module>
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/referral.py", line 18, in <module>
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:     os.getenv("BOT_USERNAME")
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR:     ^^
+[03/Mar/2026:11:40:38 +0100] [3148459] STDERR: NameError: name 'os' is not defined
+[03/Mar/2026:11:40:38 +0100] [3148459] neffgue313 - service: 21258 finished after 4.12 seconds, exit code: 1 (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148459)
+[03/Mar/2026:11:40:39 +0100] [3148467] neffgue313 - service: 21258 started (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148467)
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR: Traceback (most recent call last):
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:   File "<frozen runpy>", line 198, in _run_module_as_main
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:   File "<frozen runpy>", line 88, in _run_code
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:   File "/home/neffgue313/vpnbot/bot/main.py", line 12, in <module>
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/__init__.py", line 3, in <module>
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:     from bot.handlers import (
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:   File "/home/neffgue313/vpnbot/bot/handlers/referral.py", line 18, in <module>
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:     os.getenv("BOT_USERNAME")
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR:     ^^
+[03/Mar/2026:11:40:43 +0100] [3148467] STDERR: NameError: name 'os' is not defined
+[03/Mar/2026:11:40:44 +0100] [3148467] neffgue313 - service: 21258 finished after 4.448 seconds, exit code: 1 (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148467)
+[03/Mar/2026:11:40:45 +0100] [3148481] neffgue313 - service: 21258 started (command: '/home/neffgue313/vpnbot/venv/bin/python -m bot.main' - pid: 3148481)

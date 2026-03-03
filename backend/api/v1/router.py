@@ -1,11 +1,15 @@
 import os
-from fastapi import APIRouter, Depends, Request
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from backend.api.v1.endpoints import auth, users, subscriptions, servers, payments, referrals, admin, vpn_config
 from backend.api.deps import get_admin_user
 from backend.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -101,24 +105,23 @@ async def auth_logout_compat(
 async def subscriptions_plans_compat(
     db: AsyncSession = Depends(get_db),
 ):
-    """Public alias: GET /subscriptions/plans — returns subscription plans list."""
-    from backend.models.subscription import SubscriptionPlan
+    """Public alias: GET /subscriptions/plans — returns plan prices list."""
+    from backend.models.config import PlanPrice
     from sqlalchemy import select
     try:
-        result = await db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.price))
+        result = await db.execute(select(PlanPrice).order_by(PlanPrice.plan_name, PlanPrice.period_days))
         plans = result.scalars().all()
         return [
             {
                 "id": str(p.id),
-                "name": p.name,
-                "price": float(p.price),
-                "duration_days": p.duration_days,
-                "description": p.description or "",
-                "is_active": p.is_active,
+                "plan_name": p.plan_name,
+                "period_days": p.period_days,
+                "price_rub": float(p.price_rub),
             }
             for p in plans
         ]
-    except Exception:
+    except Exception as e:
+        logger.error(f"subscriptions_plans_compat error: {e}")
         return []
 
 
@@ -127,24 +130,23 @@ async def get_admin_plans(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Alias: GET /admin/plans — returns subscription plans for PlanPrices.jsx."""
-    from backend.models.subscription import SubscriptionPlan
+    """Alias: GET /admin/plans — returns plan prices for PlanPrices.jsx."""
+    from backend.models.config import PlanPrice
     from sqlalchemy import select
     try:
-        result = await db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.name, SubscriptionPlan.duration_days))
+        result = await db.execute(select(PlanPrice).order_by(PlanPrice.plan_name, PlanPrice.period_days))
         plans = result.scalars().all()
         return [
             {
                 "id": str(p.id),
-                "plan_name": p.name,
-                "period_days": p.duration_days,
-                "price_rub": float(p.price),
-                "is_active": p.is_active,
+                "plan_name": p.plan_name,
+                "period_days": p.period_days,
+                "price_rub": float(p.price_rub),
             }
             for p in plans
         ]
     except Exception as e:
-        logger.error(f"Error getting plans: {e}")
+        logger.error(f"get_admin_plans error: {e}")
         return []
 
 
@@ -154,23 +156,23 @@ async def create_admin_plan(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Alias: POST /admin/plans — create new subscription plan."""
-    from backend.models.subscription import SubscriptionPlan
+    """Alias: POST /admin/plans — create new plan price entry."""
+    from backend.models.config import PlanPrice
     import uuid as _uuid
     try:
-        plan = SubscriptionPlan(
+        plan = PlanPrice(
             id=str(_uuid.uuid4()),
-            name=data.get("plan_name", "Solo"),
-            duration_days=int(data.get("period_days", 30)),
-            price=float(data.get("price_rub", 299)),
-            is_active=True,
+            plan_name=data.get("plan_name", "Solo"),
+            period_days=int(data.get("period_days", 30)),
+            price_rub=float(data.get("price_rub", 299)),
         )
         db.add(plan)
         await db.commit()
         await db.refresh(plan)
-        return {"id": str(plan.id), "plan_name": plan.name, "period_days": plan.duration_days, "price_rub": float(plan.price)}
+        return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
     except Exception as e:
         await db.rollback()
+        logger.error(f"create_admin_plan error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -181,32 +183,44 @@ async def update_admin_plan(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Alias: PUT /admin/plans/{id} — update subscription plan price."""
-    from backend.models.subscription import SubscriptionPlan
+    """Alias: PUT /admin/plans/{id} — update plan price. Accepts UUID or plan_name."""
+    from backend.models.config import PlanPrice
     from sqlalchemy import select, or_
     try:
         result = await db.execute(
-            select(SubscriptionPlan).where(
-                or_(SubscriptionPlan.id == plan_id, SubscriptionPlan.name == plan_id)
+            select(PlanPrice).where(
+                or_(PlanPrice.id == plan_id, PlanPrice.plan_name == plan_id)
             )
         )
         plan = result.scalars().first()
         if not plan:
-            raise HTTPException(status_code=404, detail="Plan not found")
+            # Создаём новый если не найден
+            import uuid as _uuid
+            plan = PlanPrice(
+                id=str(_uuid.uuid4()),
+                plan_name=data.get("plan_name", plan_id),
+                period_days=int(data.get("period_days", 30)),
+                price_rub=float(data.get("price_rub", 299)),
+            )
+            db.add(plan)
+            await db.commit()
+            await db.refresh(plan)
+            return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
         if "plan_name" in data:
-            plan.name = data["plan_name"]
+            plan.plan_name = data["plan_name"]
         if "period_days" in data:
-            plan.duration_days = int(data["period_days"])
+            plan.period_days = int(data["period_days"])
         if "price_rub" in data:
-            plan.price = float(data["price_rub"])
+            plan.price_rub = float(data["price_rub"])
         if "price" in data:
-            plan.price = float(data["price"])
+            plan.price_rub = float(data["price"])
         await db.commit()
-        return {"id": str(plan.id), "plan_name": plan.name, "period_days": plan.duration_days, "price_rub": float(plan.price)}
+        return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
     except HTTPException:
         raise
     except Exception as e:
         await db.rollback()
+        logger.error(f"update_admin_plan error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -217,43 +231,33 @@ async def patch_subscription_plan(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """PATCH /admin/subscriptions/plans/{plan_id} — partial update of subscription plan.
-    Accepts plan UUID or plan name (e.g. 'Solo', 'Family'). Used by bot api_client.
-    """
-    from backend.models.subscription import SubscriptionPlan
+    """PATCH /admin/subscriptions/plans/{plan_id} — partial update of plan price."""
+    from backend.models.config import PlanPrice
     from sqlalchemy import select, or_
     try:
         result = await db.execute(
-            select(SubscriptionPlan).where(
-                or_(SubscriptionPlan.id == plan_id, SubscriptionPlan.name == plan_id)
+            select(PlanPrice).where(
+                or_(PlanPrice.id == plan_id, PlanPrice.plan_name == plan_id)
             )
         )
         plan = result.scalars().first()
         if not plan:
             raise HTTPException(status_code=404, detail="Plan not found")
-        # Partial update — only change provided fields
         if "plan_name" in data:
-            plan.name = data["plan_name"]
+            plan.plan_name = data["plan_name"]
         if "period_days" in data:
-            plan.duration_days = int(data["period_days"])
+            plan.period_days = int(data["period_days"])
         if "price_rub" in data:
-            plan.price = float(data["price_rub"])
+            plan.price_rub = float(data["price_rub"])
         if "price" in data:
-            plan.price = float(data["price"])
-        if "is_active" in data:
-            plan.is_active = bool(data["is_active"])
+            plan.price_rub = float(data["price"])
         await db.commit()
-        return {
-            "id": str(plan.id),
-            "plan_name": plan.name,
-            "period_days": plan.duration_days,
-            "price_rub": float(plan.price),
-            "is_active": plan.is_active,
-        }
+        return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
     except HTTPException:
         raise
     except Exception as e:
         await db.rollback()
+        logger.error(f"patch_subscription_plan error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -263,13 +267,13 @@ async def delete_admin_plan(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Alias: DELETE /admin/plans/{id} — delete subscription plan."""
-    from backend.models.subscription import SubscriptionPlan
+    """Alias: DELETE /admin/plans/{id} — delete plan price entry."""
+    from backend.models.config import PlanPrice
     from sqlalchemy import select, or_
     try:
         result = await db.execute(
-            select(SubscriptionPlan).where(
-                or_(SubscriptionPlan.id == plan_id, SubscriptionPlan.name == plan_id)
+            select(PlanPrice).where(
+                or_(PlanPrice.id == plan_id, PlanPrice.plan_name == plan_id)
             )
         )
         plan = result.scalars().first()
@@ -282,6 +286,7 @@ async def delete_admin_plan(
         raise
     except Exception as e:
         await db.rollback()
+        logger.error(f"delete_admin_plan error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -4,15 +4,19 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
     Table,
+    Text,
     UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship
 from backend.database import Base
+
+
 
 # Association table for many-to-many relationship
 subscription_server_association = Table(
