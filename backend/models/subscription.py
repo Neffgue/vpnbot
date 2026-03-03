@@ -47,6 +47,9 @@ class Subscription(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # Цена подписки — нужна для авто-продления
+    price = Column(Float, nullable=True, default=0.0)
+
     # Notification flags for expiry reminders
     notified_24h = Column(Boolean, default=False, nullable=False)
     notified_12h = Column(Boolean, default=False, nullable=False)

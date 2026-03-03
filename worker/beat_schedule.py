@@ -25,10 +25,10 @@ beat_schedule = {
         'options': {'queue': 'subscriptions'}
     },
     
-    # Cleanup expired subscriptions daily at 00:00 UTC
+    # Cleanup expired subscriptions + auto-renewal every hour
     'cleanup-expired-subscriptions': {
         'task': 'worker.tasks.subscription_manager.cleanup_expired_subscriptions',
-        'schedule': crontab(hour=0, minute=0),
+        'schedule': timedelta(hours=1),
         'options': {'queue': 'subscriptions'}
     },
 }

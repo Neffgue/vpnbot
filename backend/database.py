@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, QueuePool  # noqa: F401
 from sqlalchemy.orm import declarative_base
 
 from backend.config import settings
@@ -22,7 +22,13 @@ def get_engine():
             echo=settings.DEBUG,
             future=True,
             pool_pre_ping=True,
-            poolclass=NullPool,
+            # QueuePool вместо NullPool — переиспользует соединения,
+            # предотвращает исчерпание коннектов при рассылке и нагрузке
+            poolclass=QueuePool,
+            pool_size=10,
+            max_overflow=20,
+            pool_timeout=30,
+            pool_recycle=1800,
         )
     return _engine
 

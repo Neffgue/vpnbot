@@ -1,236 +1,315 @@
-"""Subscription management tasks."""
+"""Subscription management tasks — cleanup expired and AUTO-RENEWAL."""
 import logging
 import httpx
-from celery import shared_task
-from datetime import datetime, timedelta
+import asyncio
 import os
+from celery import shared_task
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-import json
 
 logger = logging.getLogger(__name__)
 
-# Database setup
+# ─── Database ────────────────────────────────────────────────────────────────
 DATABASE_URL = os.getenv(
-    'DATABASE_URL',
-    'postgresql+asyncpg://user:password@localhost/vpn_db'
+    "DATABASE_URL",
+    "postgresql+asyncpg://user:password@localhost/vpn_db",
+).replace("postgresql://", "postgresql+asyncpg://")
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=1800,
 )
-engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-
-class SubscriptionManager:
-    """Helper class for subscription management."""
-    
-    @staticmethod
-    async def get_expired_subscriptions() -> list:
-        """Get all expired but still active subscriptions."""
-        async with async_session() as session:
-            from app.models import Subscription
-            
-            now = datetime.utcnow()
-            stmt = select(Subscription).where(
-                and_(
-                    Subscription.is_active == True,
-                    Subscription.expires_at <= now
-                )
-            )
-            result = await session.execute(stmt)
-            return result.scalars().all()
-    
-    @staticmethod
-    async def deactivate_subscription(subscription_id: int) -> bool:
-        """
-        Deactivate expired subscription.
-        Remove inbound from 3x-ui panel.
-        """
-        async with async_session() as session:
-            from app.models import Subscription
-            
-            subscription = await session.get(Subscription, subscription_id)
-            if not subscription:
-                return False
-            
-            try:
-                # Remove from 3x-ui
-                if subscription.server and subscription.inbound_id:
-                    success = await SubscriptionManager.remove_inbound_from_server(
-                        subscription.server, subscription.inbound_id
-                    )
-                    if not success:
-                        logger.warning(
-                            f'Failed to remove inbound {subscription.inbound_id} '
-                            f'from server {subscription.server.name}'
-                        )
-                
-                # Mark as inactive
-                subscription.is_active = False
-                subscription.deactivated_at = datetime.utcnow()
-                await session.commit()
-                return True
-            
-            except Exception as e:
-                logger.error(f'Error deactivating subscription {subscription_id}: {e}')
-                return False
-    
-    @staticmethod
-    async def remove_inbound_from_server(server, inbound_id: int) -> bool:
-        """Remove inbound from 3x-ui panel."""
-        if not server.panel_url:
-            return False
-        
-        try:
-            url = f'{server.panel_url}/xui/api/inbounds/{inbound_id}'
-            
-            async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
-                response = await client.delete(
-                    url,
-                    auth=(server.panel_username, server.panel_password)
-                )
-                return response.status_code in [200, 204]
-        except Exception as e:
-            logger.error(f'Failed to remove inbound: {e}')
-            return False
-    
-    @staticmethod
-    async def get_all_subscriptions_for_sync() -> list:
-        """Get all active subscriptions for traffic sync."""
-        async with async_session() as session:
-            from app.models import Subscription
-            
-            stmt = select(Subscription).where(
-                Subscription.is_active == True
-            )
-            result = await session.execute(stmt)
-            return result.scalars().all()
-    
-    @staticmethod
-    async def get_inbound_stats(server, inbound_id: int) -> dict:
-        """Fetch traffic stats for inbound from 3x-ui panel."""
-        if not server.panel_url:
-            return {}
-        
-        try:
-            url = f'{server.panel_url}/xui/api/inbounds/get/{inbound_id}'
-            
-            async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
-                response = await client.get(
-                    url,
-                    auth=(server.panel_username, server.panel_password)
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('success'):
-                        inbound = data.get('obj', {})
-                        # Extract traffic stats
-                        return {
-                            'up': inbound.get('up', 0),
-                            'down': inbound.get('down', 0),
-                        }
-        except Exception as e:
-            logger.error(f'Failed to fetch inbound stats: {e}')
-        
-        return {}
-    
-    @staticmethod
-    async def update_subscription_traffic(subscription_id: int, up_bytes: int, down_bytes: int):
-        """Update subscription traffic usage."""
-        async with async_session() as session:
-            from app.models import Subscription
-            
-            subscription = await session.get(Subscription, subscription_id)
-            if subscription:
-                total_bytes = up_bytes + down_bytes
-                traffic_gb = total_bytes / (1024 ** 3)
-                subscription.traffic_used_gb = traffic_gb
-                subscription.last_traffic_sync = datetime.utcnow()
-                await session.commit()
+# ─── Импорт моделей (правильный путь) ────────────────────────────────────────
+from backend.models.subscription import Subscription  # noqa: E402
+from backend.models.user import User                   # noqa: E402
+from backend.models.payment import Payment             # noqa: E402
 
 
-@shared_task(bind=True, name='worker.tasks.subscription_manager.sync_traffic_stats')
-def sync_traffic_stats(self):
-    """
-    Sync traffic stats from 3x-ui panels to database.
-    Update subscription.traffic_used_gb field.
-    """
-    import asyncio
-    
-    async def run_sync():
-        subscriptions = await SubscriptionManager.get_all_subscriptions_for_sync()
-        results = {
-            'total': len(subscriptions),
-            'synced': 0,
-            'failed': 0
-        }
-        
-        for subscription in subscriptions:
-            try:
-                if not subscription.server or not subscription.inbound_id:
-                    continue
-                
-                stats = await SubscriptionManager.get_inbound_stats(
-                    subscription.server, subscription.inbound_id
-                )
-                
-                if stats:
-                    await SubscriptionManager.update_subscription_traffic(
-                        subscription.id, stats['up'], stats['down']
-                    )
-                    results['synced'] += 1
-                else:
-                    results['failed'] += 1
-            
-            except Exception as e:
-                logger.error(f'Error syncing traffic for subscription {subscription.id}: {e}')
-                results['failed'] += 1
-        
-        logger.info(f'sync_traffic_stats: Synced {results["synced"]}/{results["total"]} subscriptions')
-        return results
-    
+# ─────────────────────────────────────────────────────────────────────────────
+# Вспомогательные функции
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _send_tg_message(telegram_id: int, text: str) -> bool:
+    """Отправить сообщение пользователю через Telegram Bot API."""
+    token = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        logger.error("BOT_TOKEN not configured — cannot send Telegram message")
+        return False
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     try:
-        return asyncio.run(run_sync())
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                url,
+                json={"chat_id": telegram_id, "text": text, "parse_mode": "HTML"},
+            )
+            if resp.status_code == 200:
+                return True
+            logger.warning(f"TG API returned {resp.status_code} for {telegram_id}: {resp.text[:200]}")
+            return False
     except Exception as e:
-        logger.error(f'Unexpected error in sync_traffic_stats: {e}')
-        self.retry(exc=e, countdown=300, max_retries=3)
+        logger.error(f"Failed to send TG message to {telegram_id}: {e}")
+        return False
 
 
-@shared_task(bind=True, name='worker.tasks.subscription_manager.cleanup_expired_subscriptions')
+async def _fetch_bot_text(key: str, fallback: str = "") -> str:
+    """Загрузить текст уведомления из базы данных (через API)."""
+    api_url = os.getenv("API_BASE_URL", "http://backend:8000/api/v1")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{api_url}/bot-texts/public")
+            if resp.status_code == 200:
+                texts = resp.json()
+                if isinstance(texts, list):
+                    for item in texts:
+                        if item.get("key") == key:
+                            return item.get("value", fallback)
+                elif isinstance(texts, dict):
+                    return texts.get(key, fallback)
+    except Exception as e:
+        logger.warning(f"Failed to fetch bot text '{key}': {e}")
+    return fallback
+
+
+async def _remove_xui_inbound(server, inbound_id: int) -> bool:
+    """Удалить inbound из 3x-ui панели при деактивации подписки."""
+    if not getattr(server, "panel_url", None):
+        return False
+    try:
+        url = f"{server.panel_url}/xui/api/inbounds/{inbound_id}"
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            resp = await client.delete(
+                url, auth=(server.panel_username, server.panel_password)
+            )
+            return resp.status_code in [200, 204]
+    except Exception as e:
+        logger.error(f"Failed to remove xui inbound {inbound_id}: {e}")
+        return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Авто-продление подписки
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _try_auto_renew(session: AsyncSession, subscription: Subscription) -> bool:
+    """Попытаться автоматически продлить подписку.
+
+    Логика:
+    1. Проверяем баланс пользователя (user.balance).
+    2. Если хватает — списываем и продлеваем.
+    3. Уведомляем пользователя о результате.
+    """
+    user = await session.get(User, subscription.user_id)
+    if not user:
+        return False
+
+    price = float(getattr(subscription, "price", None) or 0)
+    period_days = int(getattr(subscription, "period_days", 30) or 30)
+
+    # Авто-продление только если включено у пользователя и есть цена
+    if not getattr(user, "auto_renewal", False):
+        return False
+    if price <= 0:
+        return False
+
+    # Проверяем баланс
+    balance = float(getattr(user, "balance", 0) or 0)
+    if balance < price:
+        # Сообщаем что не хватает средств
+        if user.telegram_id:
+            text_template = await _fetch_bot_text(
+                "notification_auto_renewal_failed",
+                "❌ <b>Не удалось продлить подписку</b>\n\n"
+                "На вашем балансе недостаточно средств для автопродления.\n"
+                "Баланс: <b>{balance} ₽</b>\n"
+                "Необходимо: <b>{price} ₽</b>\n\n"
+                "Пополните баланс, чтобы сохранить доступ к VPN.",
+            )
+            await _send_tg_message(
+                user.telegram_id,
+                text_template.format(balance=int(balance), price=int(price)),
+            )
+        return False
+
+    # Списываем средства
+    user.balance = balance - price
+
+    # Продлеваем подписку
+    now = datetime.now(timezone.utc)
+    current_expires = subscription.expires_at
+    if current_expires and current_expires.tzinfo is None:
+        current_expires = current_expires.replace(tzinfo=timezone.utc)
+    base = max(now, current_expires or now)
+    subscription.expires_at = base + timedelta(days=period_days)
+    subscription.is_active = True
+
+    # Записываем платёж (поля соответствуют реальной схеме Payment)
+    import uuid as _uuid
+    payment = Payment(
+        id=str(_uuid.uuid4()),
+        user_id=user.id,
+        amount=price,
+        currency="RUB",
+        provider="auto_renewal",
+        provider_payment_id=f"auto_{subscription.id}_{now.strftime('%Y%m%d%H%M%S')}",
+        status="completed",
+        plan_name=subscription.plan_name or "vpn",
+        period_days=period_days,
+        device_limit=getattr(subscription, "device_limit", 1),
+    )
+    session.add(payment)
+
+    # Уведомляем пользователя об успехе
+    if user.telegram_id:
+        text_template = await _fetch_bot_text(
+            "notification_auto_renewal_success",
+            "✅ <b>Подписка успешно продлена!</b>\n\n"
+            "Тариф: <b>{plan}</b>\n"
+            "Действует до: <b>{expires}</b>\n"
+            "Списано: <b>{price} ₽</b>\n"
+            "Остаток на балансе: <b>{balance} ₽</b>",
+        )
+        new_expires = subscription.expires_at
+        if new_expires.tzinfo:
+            msk = timezone(timedelta(hours=3))
+            new_expires = new_expires.astimezone(msk)
+        await _send_tg_message(
+            user.telegram_id,
+            text_template.format(
+                plan=subscription.plan_name or "VPN",
+                expires=new_expires.strftime("%d.%m.%Y"),
+                price=int(price),
+                balance=int(user.balance),
+            ),
+        )
+
+    logger.info(
+        f"Auto-renewed subscription {subscription.id} for user {user.id}, "
+        f"+{period_days}d, -{price}₽, new_balance={user.balance}"
+    )
+    return True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Celery Tasks
+# ─────────────────────────────────────────────────────────────────────────────
+
+@shared_task(bind=True, name="worker.tasks.subscription_manager.cleanup_expired_subscriptions")
 def cleanup_expired_subscriptions(self):
-    """
-    Daily task to deactivate expired subscriptions.
-    Remove them from 3x-ui panels.
-    """
-    import asyncio
-    
-    async def run_cleanup():
-        expired_subs = await SubscriptionManager.get_expired_subscriptions()
-        results = {
-            'total': len(expired_subs),
-            'deactivated': 0,
-            'failed': 0
-        }
-        
-        for subscription in expired_subs:
-            try:
-                success = await SubscriptionManager.deactivate_subscription(subscription.id)
-                if success:
-                    results['deactivated'] += 1
-                else:
-                    results['failed'] += 1
-            except Exception as e:
-                logger.error(f'Error deactivating subscription {subscription.id}: {e}')
-                results['failed'] += 1
-        
+    """Деактивация истёкших подписок + попытка авто-продления."""
+
+    async def _run():
+        now = datetime.now(timezone.utc)
+        results = {"total": 0, "renewed": 0, "deactivated": 0, "failed": 0}
+
+        async with async_session() as session:
+            stmt = (
+                select(Subscription)
+                .where(
+                    and_(
+                        Subscription.is_active == True,
+                        Subscription.expires_at <= now,
+                    )
+                )
+            )
+            result = await session.execute(stmt)
+            expired = result.scalars().all()
+            results["total"] = len(expired)
+
+            for sub in expired:
+                try:
+                    # 1. Попытка авто-продления
+                    renewed = await _try_auto_renew(session, sub)
+                    if renewed:
+                        results["renewed"] += 1
+                        continue
+
+                    # 2. Деактивация
+                    if getattr(sub, "server", None) and getattr(sub, "inbound_id", None):
+                        await _remove_xui_inbound(sub.server, sub.inbound_id)
+
+                    sub.is_active = False
+                    sub.deactivated_at = now
+                    results["deactivated"] += 1
+
+                except Exception as e:
+                    logger.error(f"Error processing subscription {sub.id}: {e}", exc_info=True)
+                    results["failed"] += 1
+
+            await session.commit()
+
         logger.info(
-            f'cleanup_expired_subscriptions: Deactivated {results["deactivated"]} '
-            f'subscriptions, {results["failed"]} failed'
+            f"cleanup_expired_subscriptions: total={results['total']}, "
+            f"renewed={results['renewed']}, deactivated={results['deactivated']}, "
+            f"failed={results['failed']}"
         )
         return results
-    
+
     try:
-        return asyncio.run(run_cleanup())
+        return asyncio.run(_run())
     except Exception as e:
-        logger.error(f'Unexpected error in cleanup_expired_subscriptions: {e}')
+        logger.error(f"Unexpected error in cleanup_expired_subscriptions: {e}", exc_info=True)
         self.retry(exc=e, countdown=3600, max_retries=3)
+
+
+@shared_task(bind=True, name="worker.tasks.subscription_manager.sync_traffic_stats")
+def sync_traffic_stats(self):
+    """Синхронизация трафика из 3x-ui панелей в БД."""
+
+    async def _run():
+        results = {"total": 0, "synced": 0, "failed": 0}
+
+        async with async_session() as session:
+            stmt = select(Subscription).where(Subscription.is_active == True)
+            result = await session.execute(stmt)
+            subscriptions = result.scalars().all()
+            results["total"] = len(subscriptions)
+
+            for sub in subscriptions:
+                try:
+                    if not getattr(sub, "server", None) or not getattr(sub, "inbound_id", None):
+                        continue
+
+                    server = sub.server
+                    if not getattr(server, "panel_url", None):
+                        continue
+
+                    url = f"{server.panel_url}/xui/api/inbounds/{sub.inbound_id}"
+                    async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+                        resp = await client.get(
+                            url, auth=(server.panel_username, server.panel_password)
+                        )
+                    if resp.status_code != 200:
+                        results["failed"] += 1
+                        continue
+
+                    data = resp.json().get("obj", {})
+                    total_bytes = int(data.get("up", 0)) + int(data.get("down", 0))
+                    sub.traffic_used_gb = total_bytes / (1024 ** 3)
+                    sub.last_traffic_sync = datetime.now(timezone.utc)
+                    results["synced"] += 1
+
+                except Exception as e:
+                    logger.error(f"Error syncing traffic for sub {sub.id}: {e}")
+                    results["failed"] += 1
+
+            await session.commit()
+
+        logger.info(
+            f"sync_traffic_stats: synced={results['synced']}/{results['total']}, "
+            f"failed={results['failed']}"
+        )
+        return results
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        logger.error(f"Unexpected error in sync_traffic_stats: {e}", exc_info=True)
+        self.retry(exc=e, countdown=300, max_retries=3)

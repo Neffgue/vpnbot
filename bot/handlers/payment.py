@@ -1,35 +1,129 @@
-"""Payment flow handler"""
+"""Payment flow handler — тарифы и цены загружаются из БД через API (Single Source of Truth)."""
 
 import logging
+from typing import Optional
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, LabeledPrice, ShippingOption
+from aiogram.types import CallbackQuery, LabeledPrice, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from bot.config import config
 from bot.keyboards.main_menu import get_main_menu
 from bot.keyboards.payment_kb import (
-    get_plan_keyboard,
-    get_period_keyboard,
     get_payment_method_keyboard,
-    get_payment_confirmation_keyboard,
     get_subscription_link_keyboard,
 )
 from bot.states.payment_states import PaymentStates
 from bot.utils.api_client import APIClient
-from bot.utils.formatters import format_price, format_payment_confirmation, get_fallback_texts
+from bot.utils.formatters import format_payment_confirmation
 
 logger = logging.getLogger(__name__)
 
 router = Router()
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Вспомогательные функции для работы с тарифами из API
+# ─────────────────────────────────────────────────────────────────────────────
+
+PERIOD_LABELS = {
+    7: "7 дней",
+    14: "14 дней",
+    30: "1 месяц",
+    60: "2 месяца",
+    90: "3 месяца",
+    180: "6 месяцев",
+    365: "12 месяцев",
+}
+
+FALLBACK_PLANS = [
+    {
+        "id": "solo",
+        "plan_name": "solo",
+        "name": "👤 Соло (1 устройство)",
+        "devices": 1,
+        "period_days": 30,
+        "price": 150,
+        "is_active": True,
+    },
+    {
+        "id": "family",
+        "plan_name": "family",
+        "name": "👨‍👩‍👧‍👦 Семейный (5 устройств)",
+        "devices": 5,
+        "period_days": 30,
+        "price": 250,
+        "is_active": True,
+    },
+]
+
+
+async def _fetch_plans(api: APIClient) -> list:
+    """Загрузить тарифы из API. При ошибке — вернуть fallback-значения."""
+    try:
+        plans = await api.get_subscription_plans()
+        if plans:
+            return [p for p in plans if p.get("is_active", True)]
+    except Exception as e:
+        logger.warning(f"Failed to fetch plans from API, using fallback: {e}")
+    return FALLBACK_PLANS
+
+
+def _group_plans_by_name(plans: list) -> dict:
+    """Сгруппировать тарифы по plan_name → список периодов."""
+    grouped: dict = {}
+    for plan in plans:
+        key = plan.get("plan_name") or plan.get("id") or "solo"
+        if key not in grouped:
+            grouped[key] = {
+                "key": key,
+                "name": plan.get("name", key),
+                "devices": plan.get("devices", plan.get("device_limit", 1)),
+                "periods": {},
+            }
+        days = int(plan.get("period_days", 30))
+        price = float(plan.get("price", 0))
+        grouped[key]["periods"][days] = price
+    return grouped
+
+
+def _build_plan_keyboard(grouped: dict) -> InlineKeyboardMarkup:
+    """Клавиатура выбора тарифного плана (строки = отдельные планы)."""
+    rows = []
+    for key, info in grouped.items():
+        label = f"{info['name']} — {info['devices']} уст."
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"plan_{key}")])
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _build_period_keyboard(plan_key: str, periods: dict) -> InlineKeyboardMarkup:
+    """Клавиатура выбора периода подписки с ценами из БД."""
+    rows = []
+    for days in sorted(periods.keys()):
+        price = periods[days]
+        label_day = PERIOD_LABELS.get(int(days), f"{days} дней")
+        label = f"{label_day} — {int(price)} ₽"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"period_{days}")])
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_plans")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Handlers
+# ─────────────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "buy_subscription")
 async def buy_subscription_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    """
-    Handle subscription purchase start
-    Show available plans (Соло / Семейный)
-    """
+    """Показать список тарифных планов, загруженных из БД."""
     await callback.answer()
+
+    async with APIClient(config.API_BASE_URL) as api:
+        plans = await _fetch_plans(api)
+
+    grouped = _group_plans_by_name(plans)
+
+    # Сохраняем сгруппированные планы в state для последующих шагов
+    await state.update_data(grouped_plans=grouped)
+    await state.set_state(PaymentStates.waiting_plan_selection)
 
     plan_text = (
         "⚡️ <b>Выберите тариф из предложенных</b>\n\n"
@@ -37,113 +131,72 @@ async def buy_subscription_handler(callback: CallbackQuery, state: FSMContext) -
         "В любой момент вы сможете улучшить свой тариф на большее количество устройств!"
     )
 
-    # Статичные тарифы: Соло и Семейный
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Соло - 1 устройство", callback_data="plan_solo")],
-        [InlineKeyboardButton(text="👨‍👩‍👧‍👦 Семейный - 5 устройств", callback_data="plan_family")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")],
-    ])
-
     try:
-        await callback.message.edit_text(plan_text, parse_mode="HTML", reply_markup=keyboard)
-    except Exception:
-        await callback.message.answer(plan_text, parse_mode="HTML", reply_markup=keyboard)
-
-    await state.set_state(PaymentStates.waiting_plan_selection)
-
-
-# Цены для тарифов
-PLAN_PRICES = {
-    "solo": {
-        "name": "👤 Минимальный (1 устройство)",
-        "devices": 1,
-        "prices": {7: 90, 30: 150, 90: 400, 180: 760, 365: 1450},
-    },
-    "family": {
-        "name": "👨‍👩‍👧‍👦 Семейный (5 устройств)",
-        "devices": 5,
-        "prices": {7: 150, 30: 250, 90: 650, 180: 1200, 365: 2300},
-    },
-}
-
-
-def _get_period_keyboard_with_prices(plan_key: str) -> "InlineKeyboardMarkup":
-    """Клавиатура выбора периода с ценами из PLAN_PRICES."""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    prices = PLAN_PRICES.get(plan_key, PLAN_PRICES["solo"])["prices"]
-    period_labels = {7: "7 дней", 30: "1 месяц", 90: "3 месяца", 180: "6 месяцев", 365: "12 месяцев"}
-    rows = []
-    row = []
-    for days, price in prices.items():
-        btn = InlineKeyboardButton(
-            text=f"{period_labels[days]} — {price} рублей",
-            callback_data=f"period_{days}",
+        await callback.message.edit_text(
+            plan_text, parse_mode="HTML", reply_markup=_build_plan_keyboard(grouped)
         )
-        row.append(btn)
-        if len(row) == 1:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="buy_subscription")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    except Exception:
+        await callback.message.answer(
+            plan_text, parse_mode="HTML", reply_markup=_build_plan_keyboard(grouped)
+        )
 
 
 @router.callback_query(F.data.startswith("plan_"), PaymentStates.waiting_plan_selection)
 async def select_plan(callback: CallbackQuery, state: FSMContext) -> None:
-    """
-    Handle plan selection (solo / family)
-    Show period selection with prices in rubles
-    """
+    """Выбор тарифного плана — показываем периоды с ценами из БД."""
     await callback.answer()
 
-    plan_key = callback.data.replace("plan_", "")  # "solo" or "family"
-    plan_info = PLAN_PRICES.get(plan_key, PLAN_PRICES["solo"])
+    plan_key = callback.data.replace("plan_", "")
+    data = await state.get_data()
+    grouped = data.get("grouped_plans", {})
+
+    if not grouped:
+        # Перезагружаем если state пустой
+        async with APIClient(config.API_BASE_URL) as api:
+            plans = await _fetch_plans(api)
+        grouped = _group_plans_by_name(plans)
+        await state.update_data(grouped_plans=grouped)
+
+    plan_info = grouped.get(plan_key)
+    if not plan_info:
+        await callback.answer("Тариф не найден. Попробуйте ещё раз.", show_alert=True)
+        return
+
+    await state.update_data(selected_plan_key=plan_key, selected_plan_info=plan_info)
+    await state.set_state(PaymentStates.waiting_period_selection)
 
     period_text = (
-        "Выберите период, на который хотите оформить подписку\n\n"
-        "Учтите! Чем больше период, тем ниже цена 💵\n\n"
-        f"Выбран тариф - {plan_info['name']}"
+        f"📅 <b>Выберите период подписки</b>\n\n"
+        f"Тариф: <b>{plan_info['name']}</b>\n"
+        f"Устройств: <b>{plan_info['devices']}</b>\n\n"
+        "Учтите! Чем больше период, тем ниже цена 💵"
     )
 
     try:
         await callback.message.edit_text(
             period_text,
             parse_mode="HTML",
-            reply_markup=_get_period_keyboard_with_prices(plan_key),
+            reply_markup=_build_period_keyboard(plan_key, plan_info["periods"]),
         )
     except Exception:
         await callback.message.answer(
             period_text,
             parse_mode="HTML",
-            reply_markup=_get_period_keyboard_with_prices(plan_key),
+            reply_markup=_build_period_keyboard(plan_key, plan_info["periods"]),
         )
-
-    await state.update_data(selected_plan={"key": plan_key, **plan_info})
-    await state.set_state(PaymentStates.waiting_period_selection)
 
 
 @router.callback_query(F.data.startswith("period_"), PaymentStates.waiting_period_selection)
 async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
-    """
-    Handle period selection — show payment method choice
-    """
+    """Выбор периода — показываем методы оплаты."""
     await callback.answer()
 
-    period_str = callback.data.replace("period_", "")
-    period_days = int(period_str)
-
+    period_days = int(callback.data.replace("period_", ""))
     data = await state.get_data()
-    selected_plan = data.get("selected_plan", {})
-    plan_key = selected_plan.get("key", "solo")
-    plan_prices = selected_plan.get("prices", PLAN_PRICES["solo"]["prices"])
-    price = plan_prices.get(period_days, 150)
-
-    payment_text = (
-        "💸 <b>Выберите способ оплаты для продолжения:</b>\n\n"
-        "😁 Советуем оплачивать подписку через <b>СБП</b> — это дешевле и быстрее."
-    )
+    plan_key = data.get("selected_plan_key", "solo")
+    plan_info = data.get("selected_plan_info", {})
+    periods = plan_info.get("periods", {})
+    price = periods.get(period_days, periods.get(str(period_days), 150))
 
     await state.update_data(
         period_days=period_days,
@@ -152,6 +205,11 @@ async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
         invoice_payload=f"vpn_{plan_key}_{period_days}",
     )
     await state.set_state(PaymentStates.waiting_payment_method)
+
+    payment_text = (
+        "💸 <b>Выберите способ оплаты для продолжения:</b>\n\n"
+        "😁 Советуем оплачивать подписку через <b>СБП</b> — это дешевле и быстрее."
+    )
 
     try:
         await callback.message.edit_text(
@@ -169,122 +227,113 @@ async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "pay_stars", PaymentStates.waiting_payment_method)
 async def pay_with_stars(callback: CallbackQuery, state: FSMContext) -> None:
-    """
-    Handle Telegram Stars payment
-    Send invoice to user
-    """
+    """Оплата Telegram Stars — отправляем invoice."""
     await callback.answer()
-    
+
     data = await state.get_data()
-    selected_plan = data.get("selected_plan", {})
-    period_days = data.get("period_days", 0)
+    plan_info = data.get("selected_plan_info", {})
+    period_days = data.get("period_days", 30)
     price = data.get("price", 0)
-    invoice_payload = data.get("invoice_payload", "")
-    
-    user_id = callback.from_user.id
-    bot = callback.bot
-    
+    invoice_payload = data.get("invoice_payload", f"vpn_sub_{callback.from_user.id}_{period_days}")
+    plan_name = plan_info.get("name", "VPN Подписка")
+
     try:
-        # Send invoice for Telegram Stars payment
-        prices = [LabeledPrice(label="Подписка VPN", amount=int(price * 100))]
-        
-        await bot.send_invoice(
-            chat_id=user_id,
-            title=selected_plan.get("name", "VPN Subscription"),
+        prices = [LabeledPrice(label="Подписка VPN", amount=int(float(price) * 100))]
+        await callback.bot.send_invoice(
+            chat_id=callback.from_user.id,
+            title=plan_name,
             description=f"Подписка на {period_days} дней",
-            payload=invoice_payload or f"vpn_sub_{user_id}_{period_days}",
-            provider_token="",  # Empty for Telegram Stars
-            currency="XTR",  # Telegram Stars currency code
+            payload=invoice_payload,
+            provider_token="",  # Telegram Stars — пустой токен
+            currency="XTR",
             prices=prices,
             start_parameter="vpn_subscription",
         )
-        
         try:
             await callback.message.edit_text(
                 "⭐ Счёт для оплаты отправлен. Нажмите кнопку <b>Оплатить</b> в сообщении выше.",
-                reply_markup=get_main_menu()
+                parse_mode="HTML",
+                reply_markup=get_main_menu(),
             )
         except Exception:
             await callback.message.answer(
                 "⭐ Счёт для оплаты отправлен. Нажмите кнопку <b>Оплатить</b> в сообщении выше.",
-                reply_markup=get_main_menu()
+                parse_mode="HTML",
+                reply_markup=get_main_menu(),
             )
-    
     except Exception as e:
-        logger.error(f"Error sending invoice: {e}")
-        
+        logger.error(f"Error sending Stars invoice: {e}", exc_info=True)
         try:
             await callback.message.edit_text(
                 "❌ Ошибка при отправке счёта. Попробуйте позже.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(),
             )
         except Exception:
             await callback.message.answer(
                 "❌ Ошибка при отправке счёта. Попробуйте позже.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(),
             )
 
 
 @router.callback_query(F.data == "pay_yookassa", PaymentStates.waiting_payment_method)
 async def pay_with_yookassa(callback: CallbackQuery, state: FSMContext) -> None:
-    """
-    Handle YooKassa payment
-    Send payment link
-    """
+    """Оплата YooKassa — показываем ссылку."""
     await callback.answer()
-    
+
     data = await state.get_data()
     yookassa_link = data.get("yookassa_link", "")
-    
+
     if not yookassa_link:
         try:
             await callback.message.edit_text(
                 "❌ Ссылка на оплату недоступна. Попробуйте позже.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(),
             )
         except Exception:
             await callback.message.answer(
                 "❌ Ссылка на оплату недоступна. Попробуйте позже.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(),
             )
         return
-    
+
+    text = (
+        "💳 <b>Перейдите по ссылке для оплаты через YooKassa</b>\n\n"
+        "Доступные способы оплаты:\n"
+        "• Карта Visa/Mastercard/Мир\n"
+        "• СБП (переводы по номеру телефона)\n"
+        "• Яндекс.Касса\n"
+        "• Apple Pay, Google Pay\n\n"
+        "После успешной оплаты вам будет отправлена ссылка для подключения."
+    )
     try:
         await callback.message.edit_text(
-            "💳 <b>Перейдите по ссылке для оплаты через YooKassa</b>\n\n"
-            "Доступные способы оплаты:\n"
-            "• Карта Visa/Mastercard/Мир\n"
-            "• СБП (переводы по номеру телефона)\n"
-            "• Яндекс.Касса\n"
-            "• Apple Pay, Google Pay\n\n"
-            "После успешной оплаты вам будет отправлена ссылка для подключения.",
-            reply_markup=get_subscription_link_keyboard(yookassa_link)
+            text, parse_mode="HTML", reply_markup=get_subscription_link_keyboard(yookassa_link)
         )
     except Exception:
         await callback.message.answer(
-            "💳 <b>Перейдите по ссылке для оплаты через YooKassa</b>\n\n"
-            "Доступные способы оплаты:\n"
-            "• Карта Visa/Mastercard/Мир\n"
-            "• СБП (переводы по номеру телефона)\n"
-            "• Яндекс.Касса\n"
-            "• Apple Pay, Google Pay\n\n"
-            "После успешной оплаты вам будет отправлена ссылка для подключения.",
-            reply_markup=get_subscription_link_keyboard(yookassa_link)
+            text, parse_mode="HTML", reply_markup=get_subscription_link_keyboard(yookassa_link)
         )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Навигация назад
+# ─────────────────────────────────────────────────────────────────────────────
+
 @router.callback_query(F.data == "back_to_plans")
 async def back_to_plans(callback: CallbackQuery, state: FSMContext) -> None:
-    """Go back from period selection to plan selection"""
+    """Вернуться к выбору тарифного плана."""
     await callback.answer()
 
-    # Статичные тарифы — формируем клавиатуру напрямую, как в buy_subscription_handler
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Соло - 1 устройство", callback_data="plan_solo")],
-        [InlineKeyboardButton(text="👨‍👩‍👧‍👦 Семейный - 5 устройств", callback_data="plan_family")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")],
-    ])
+    data = await state.get_data()
+    grouped = data.get("grouped_plans", {})
+
+    if not grouped:
+        async with APIClient(config.API_BASE_URL) as api:
+            plans = await _fetch_plans(api)
+        grouped = _group_plans_by_name(plans)
+        await state.update_data(grouped_plans=grouped)
+
+    await state.set_state(PaymentStates.waiting_plan_selection)
 
     plan_text = (
         "⚡️ <b>Выберите тариф из предложенных</b>\n\n"
@@ -293,101 +342,79 @@ async def back_to_plans(callback: CallbackQuery, state: FSMContext) -> None:
     )
 
     try:
-        await callback.message.edit_text(plan_text, parse_mode="HTML", reply_markup=keyboard)
+        await callback.message.edit_text(
+            plan_text, parse_mode="HTML", reply_markup=_build_plan_keyboard(grouped)
+        )
     except Exception:
-        await callback.message.answer(plan_text, parse_mode="HTML", reply_markup=keyboard)
-
-    await state.set_state(PaymentStates.waiting_plan_selection)
+        await callback.message.answer(
+            plan_text, parse_mode="HTML", reply_markup=_build_plan_keyboard(grouped)
+        )
 
 
 @router.callback_query(F.data == "back_to_payment")
 async def back_to_payment(callback: CallbackQuery, state: FSMContext) -> None:
-    """Go back from payment method to period selection"""
+    """Вернуться к выбору периода."""
     await callback.answer()
 
     data = await state.get_data()
-    selected_plan = data.get("selected_plan", {})
-    plan_key = selected_plan.get("key", "solo")
+    plan_key = data.get("selected_plan_key", "solo")
+    plan_info = data.get("selected_plan_info", {})
+
+    await state.set_state(PaymentStates.waiting_period_selection)
 
     period_text = (
-        "Выберите период, на который хотите оформить подписку\n\n"
-        "Учтите! Чем больше период, тем ниже цена 💵\n\n"
-        f"Выбран тариф - {selected_plan.get('name', 'Соло')}"
+        f"📅 <b>Выберите период подписки</b>\n\n"
+        f"Тариф: <b>{plan_info.get('name', 'VPN')}</b>\n"
+        f"Устройств: <b>{plan_info.get('devices', 1)}</b>\n\n"
+        "Учтите! Чем больше период, тем ниже цена 💵"
     )
 
     try:
         await callback.message.edit_text(
             period_text,
             parse_mode="HTML",
-            reply_markup=_get_period_keyboard_with_prices(plan_key),
+            reply_markup=_build_period_keyboard(plan_key, plan_info.get("periods", {})),
         )
     except Exception:
         await callback.message.answer(
             period_text,
             parse_mode="HTML",
-            reply_markup=_get_period_keyboard_with_prices(plan_key),
+            reply_markup=_build_period_keyboard(plan_key, plan_info.get("periods", {})),
         )
-
-    await state.set_state(PaymentStates.waiting_period_selection)
 
 
 @router.callback_query(F.data == "back_to_periods")
 async def back_to_periods(callback: CallbackQuery, state: FSMContext) -> None:
-    """Go back from payment confirmation to period selection"""
-    await callback.answer()
-
-    data = await state.get_data()
-    selected_plan = data.get("selected_plan", {})
-    plan_key = selected_plan.get("key", "solo")
-
-    period_text = (
-        "Выберите период, на который хотите оформить подписку\n\n"
-        "Учтите! Чем больше период, тем ниже цена 💵\n\n"
-        f"Выбран тариф - {selected_plan.get('name', 'Соло')}"
-    )
-
-    try:
-        await callback.message.edit_text(
-            period_text,
-            parse_mode="HTML",
-            reply_markup=_get_period_keyboard_with_prices(plan_key),
-        )
-    except Exception:
-        await callback.message.answer(
-            period_text,
-            parse_mode="HTML",
-            reply_markup=_get_period_keyboard_with_prices(plan_key),
-        )
-
-    await state.set_state(PaymentStates.waiting_period_selection)
+    """Алиас back_to_payment — возврат к периодам."""
+    await back_to_payment(callback, state)
 
 
 @router.callback_query(F.data == "confirm_payment")
 async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle confirm payment button — redirect to payment method selection"""
+    """Подтверждение оплаты — переходим к выбору метода."""
     await callback.answer()
-    
+
     data = await state.get_data()
-    selected_plan = data.get("selected_plan", {})
+    plan_info = data.get("selected_plan_info", {})
     period_days = data.get("period_days", 0)
     price = data.get("price", 0)
 
     confirmation_text = format_payment_confirmation(
-        plan_name=selected_plan.get("name", "VPN"),
+        plan_name=plan_info.get("name", "VPN"),
         period_days=period_days,
         price=price,
-        currency="RUB"
+        currency="RUB",
     )
 
     try:
         await callback.message.edit_text(
             confirmation_text,
-            reply_markup=get_payment_method_keyboard()
+            reply_markup=get_payment_method_keyboard(),
         )
     except Exception:
         await callback.message.answer(
             confirmation_text,
-            reply_markup=get_payment_method_keyboard()
+            reply_markup=get_payment_method_keyboard(),
         )
 
     await state.set_state(PaymentStates.waiting_payment_method)
