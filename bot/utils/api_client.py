@@ -124,9 +124,19 @@ class APIClient:
                 return {}
             raise
     
-    async def get_subscription_plans(self) -> Dict[str, Any]:
+    async def get_subscription_plans(self) -> list:
         """Get available subscription plans"""
-        return await self.get("/subscriptions/plans")
+        try:
+            result = await self.get("/subscriptions/plans")
+            # API возвращает список напрямую
+            if isinstance(result, list):
+                return result
+            # На случай если вернёт dict с ключом items/plans
+            if isinstance(result, dict):
+                return result.get("plans", result.get("items", []))
+            return []
+        except Exception:
+            return []
     
     async def create_payment_link(
         self,
@@ -218,16 +228,20 @@ class APIClient:
                 return {}
 
     async def get_bot_buttons(self) -> list:
-        """Get main menu buttons — uses public endpoint"""
+        """Get main menu buttons — uses public endpoint.
+        API returns list directly (each item is a dict with id, text, callback_data, etc.)
+        """
         try:
             result = await self.get("/bot-buttons/public")
-            return result.get("buttons", [])
-        except Exception:
-            try:
-                result = await self.get("/admin/bot-buttons")
+            # API возвращает список напрямую
+            if isinstance(result, list):
+                return result
+            # На случай если вернёт dict
+            if isinstance(result, dict):
                 return result.get("buttons", [])
-            except Exception:
-                return []
+            return []
+        except Exception:
+            return []
     
     # Instructions endpoints
     async def get_instructions(self) -> Dict[str, Any]:
@@ -288,52 +302,24 @@ class APIClient:
             }
         )
 
-    # ── Subscription plans (цены) ──────────────────────────────
-    async def get_subscription_plans(self) -> list:
-        """Получить список тарифных планов."""
-        try:
-            return await self.get("/subscriptions/plans")
-        except Exception:
-            return []
-
     async def update_subscription_plan(self, plan_id: str, data: dict) -> Dict[str, Any]:
         """Обновить тарифный план (цену и т.д.)."""
         return await self.patch(f"/admin/subscriptions/plans/{plan_id}", json=data)
-
-    # ── Bot buttons (изображения) ──────────────────────────────
-    async def get_bot_buttons(self) -> list:
-        """Получить список кнопок меню бота."""
-        try:
-            return await self.get("/bot-buttons/public")
-        except Exception:
-            return []
 
     async def update_bot_button(self, btn_id: str, data: dict) -> Dict[str, Any]:
         """Обновить кнопку меню бота."""
         return await self.patch(f"/admin/bot-buttons/{btn_id}", json=data)
 
-    # ── Instruction steps (изображения) ───────────────────────
     async def get_instruction_steps(self, device: str) -> list:
         """Получить шаги инструкции для устройства."""
         try:
-            return await self.get(f"/instructions/{device}/steps")
+            result = await self.get(f"/admin/instructions/{device}/steps")
+            if isinstance(result, list):
+                return result
+            return []
         except Exception:
             return []
 
     async def update_instruction_step(self, device: str, step_num: int, data: dict) -> Dict[str, Any]:
         """Обновить шаг инструкции (изображение и т.д.)."""
         return await self.patch(f"/admin/instructions/{device}/steps/{step_num}", json=data)
-
-    async def patch(self, endpoint: str, **kwargs) -> Dict[str, Any]:
-        """PATCH request helper."""
-        url = f"{self.base_url}{endpoint}"
-        try:
-            response = await self.client.patch(url, **kwargs)
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error on PATCH {url}: {e.response.status_code} — {e.response.text}")
-            return {"error": str(e), "status_code": e.response.status_code}
-        except Exception as e:
-            logger.error(f"Error on PATCH {url}: {e}")
-            return {"error": str(e)}

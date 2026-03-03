@@ -14,7 +14,7 @@ sys.path.insert(0, os.getcwd())
 from backend.config import settings
 from backend.database import Base, get_engine
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text, select
+from sqlalchemy import text
 
 DEFAULT_BUTTONS = [
     {"text": "🎁 Бесплатный доступ",  "callback_data": "free_trial",       "url": "", "row": 0},
