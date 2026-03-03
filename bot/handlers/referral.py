@@ -1,6 +1,7 @@
 """Referral program and partner program handlers"""
 
 import logging
+import os
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
 from aiogram.fsm.context import FSMContext
