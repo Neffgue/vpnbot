@@ -122,6 +122,122 @@ async def subscriptions_plans_compat(
         return []
 
 
+@api_router.get("/admin/plans", tags=["compat"])
+async def get_admin_plans(
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: GET /admin/plans — returns subscription plans for PlanPrices.jsx."""
+    from backend.models.subscription import SubscriptionPlan
+    from sqlalchemy import select
+    try:
+        result = await db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.name, SubscriptionPlan.duration_days))
+        plans = result.scalars().all()
+        return [
+            {
+                "id": str(p.id),
+                "plan_name": p.name,
+                "period_days": p.duration_days,
+                "price_rub": float(p.price),
+                "is_active": p.is_active,
+            }
+            for p in plans
+        ]
+    except Exception as e:
+        logger.error(f"Error getting plans: {e}")
+        return []
+
+
+@api_router.post("/admin/plans", tags=["compat"])
+async def create_admin_plan(
+    data: dict,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: POST /admin/plans — create new subscription plan."""
+    from backend.models.subscription import SubscriptionPlan
+    import uuid as _uuid
+    try:
+        plan = SubscriptionPlan(
+            id=str(_uuid.uuid4()),
+            name=data.get("plan_name", "Solo"),
+            duration_days=int(data.get("period_days", 30)),
+            price=float(data.get("price_rub", 299)),
+            is_active=True,
+        )
+        db.add(plan)
+        await db.commit()
+        await db.refresh(plan)
+        return {"id": str(plan.id), "plan_name": plan.name, "period_days": plan.duration_days, "price_rub": float(plan.price)}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/admin/plans/{plan_id}", tags=["compat"])
+async def update_admin_plan(
+    plan_id: str,
+    data: dict,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: PUT /admin/plans/{id} — update subscription plan price."""
+    from backend.models.subscription import SubscriptionPlan
+    from sqlalchemy import select, or_
+    try:
+        result = await db.execute(
+            select(SubscriptionPlan).where(
+                or_(SubscriptionPlan.id == plan_id, SubscriptionPlan.name == plan_id)
+            )
+        )
+        plan = result.scalars().first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        if "plan_name" in data:
+            plan.name = data["plan_name"]
+        if "period_days" in data:
+            plan.duration_days = int(data["period_days"])
+        if "price_rub" in data:
+            plan.price = float(data["price_rub"])
+        if "price" in data:
+            plan.price = float(data["price"])
+        await db.commit()
+        return {"id": str(plan.id), "plan_name": plan.name, "period_days": plan.duration_days, "price_rub": float(plan.price)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.delete("/admin/plans/{plan_id}", tags=["compat"])
+async def delete_admin_plan(
+    plan_id: str,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias: DELETE /admin/plans/{id} — delete subscription plan."""
+    from backend.models.subscription import SubscriptionPlan
+    from sqlalchemy import select, or_
+    try:
+        result = await db.execute(
+            select(SubscriptionPlan).where(
+                or_(SubscriptionPlan.id == plan_id, SubscriptionPlan.name == plan_id)
+            )
+        )
+        plan = result.scalars().first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        await db.delete(plan)
+        await db.commit()
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.get("/users", tags=["compat"])
 async def users_list_compat(
     request: Request,
@@ -170,6 +286,49 @@ async def users_list_compat(
 # ── Public bot endpoints (no auth needed — used by the bot itself) ─────────
 # These allow the bot process to fetch texts, settings, and buttons without admin auth.
 # We query DB directly here instead of calling FastAPI endpoint functions (which have Depends).
+
+@api_router.get("/admin/bot-texts", tags=["compat"])
+async def get_admin_bot_texts(
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """GET /admin/bot-texts — returns all bot texts as key:value dict."""
+    import json as _json
+    from sqlalchemy import select as _select
+    from backend.models.config import BotText as _BotText
+    try:
+        result = await db.execute(_select(_BotText))
+        rows = result.scalars().all()
+        return {r.key: r.value for r in rows}
+    except Exception:
+        return {}
+
+
+@api_router.put("/admin/bot-texts/{key}", tags=["compat"])
+async def update_admin_bot_text(
+    key: str,
+    data: dict,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """PUT /admin/bot-texts/{key} — create or update a bot text entry."""
+    import uuid as _uuid
+    from sqlalchemy import select as _select
+    from backend.models.config import BotText as _BotText
+    try:
+        result = await db.execute(_select(_BotText).where(_BotText.key == key))
+        existing = result.scalars().first()
+        value = data.get("value", "")
+        if existing:
+            existing.value = value
+        else:
+            db.add(_BotText(id=str(_uuid.uuid4()), key=key, value=value, description=""))
+        await db.commit()
+        return {"key": key, "value": value}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @api_router.get("/bot-texts/public", tags=["public"])
 async def bot_texts_public(db: AsyncSession = Depends(get_db)):
