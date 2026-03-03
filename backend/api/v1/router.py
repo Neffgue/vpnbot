@@ -210,6 +210,53 @@ async def update_admin_plan(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.patch("/admin/subscriptions/plans/{plan_id}", tags=["compat"])
+async def patch_subscription_plan(
+    plan_id: str,
+    data: dict,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """PATCH /admin/subscriptions/plans/{plan_id} — partial update of subscription plan.
+    Accepts plan UUID or plan name (e.g. 'Solo', 'Family'). Used by bot api_client.
+    """
+    from backend.models.subscription import SubscriptionPlan
+    from sqlalchemy import select, or_
+    try:
+        result = await db.execute(
+            select(SubscriptionPlan).where(
+                or_(SubscriptionPlan.id == plan_id, SubscriptionPlan.name == plan_id)
+            )
+        )
+        plan = result.scalars().first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        # Partial update — only change provided fields
+        if "plan_name" in data:
+            plan.name = data["plan_name"]
+        if "period_days" in data:
+            plan.duration_days = int(data["period_days"])
+        if "price_rub" in data:
+            plan.price = float(data["price_rub"])
+        if "price" in data:
+            plan.price = float(data["price"])
+        if "is_active" in data:
+            plan.is_active = bool(data["is_active"])
+        await db.commit()
+        return {
+            "id": str(plan.id),
+            "plan_name": plan.name,
+            "period_days": plan.duration_days,
+            "price_rub": float(plan.price),
+            "is_active": plan.is_active,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.delete("/admin/plans/{plan_id}", tags=["compat"])
 async def delete_admin_plan(
     plan_id: str,

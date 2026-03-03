@@ -27,13 +27,13 @@ export default function Instructions() {
     const key = `instructions_${activeDevice}_steps`
     const raw = botTexts[key]
     if (raw) {
-      try { setSteps(JSON.parse(raw)) } catch { setSteps([{ step: 1, text: '', image_url: '' }]) }
+      try { setSteps(JSON.parse(raw)) } catch { setSteps([{ step: 1, text: '', image_url: '', buttons: [] }]) }
     } else {
       // Try legacy text format
       const legacyKey = `instructions_${activeDevice}`
       const legacy = botTexts[legacyKey]
-      if (legacy) setSteps([{ step: 1, text: legacy, image_url: '' }])
-      else setSteps([{ step: 1, text: '', image_url: '' }])
+      if (legacy) setSteps([{ step: 1, text: legacy, image_url: '', buttons: [] }])
+      else setSteps([{ step: 1, text: '', image_url: '', buttons: [] }])
     }
   }, [activeDevice, botTexts])
 
@@ -67,7 +67,7 @@ export default function Instructions() {
   }
 
   function addStep() {
-    setSteps(s => [...s, { step: s.length + 1, text: '', image_url: '' }])
+    setSteps(s => [...s, { step: s.length + 1, text: '', image_url: '', buttons: [] }])
   }
 
   function removeStep(idx) {

@@ -429,21 +429,55 @@ async def update_bot_button(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Обновить кнопку меню."""
+    """Обновить кнопку меню (полная замена)."""
     stmt = select(BotText).where(BotText.key == btn_id)
     result = await db.execute(stmt)
     btn = result.scalars().first()
     if not btn:
         raise HTTPException(status_code=404, detail="Button not found")
-    btn.value = json.dumps({
-        "text": data.get("text", ""),
-        "callback_data": data.get("callback_data", ""),
-        "url": data.get("url", ""),
-        "row": data.get("row", 0),
-        "image_url": data.get("image_url", ""),
-    }, ensure_ascii=False)
+    # Read existing data first to preserve fields not provided
+    try:
+        existing = json.loads(btn.value)
+    except Exception:
+        existing = {}
+    existing.update({
+        "text": data.get("text", existing.get("text", "")),
+        "callback_data": data.get("callback_data", existing.get("callback_data", "")),
+        "url": data.get("url", existing.get("url", "")),
+        "row": data.get("row", existing.get("row", 0)),
+        "image_url": data.get("image_url", existing.get("image_url", "")),
+    })
+    btn.value = json.dumps(existing, ensure_ascii=False)
     await db.commit()
     return {"success": True}
+
+
+@router.patch("/bot-buttons/{btn_id}")
+async def patch_bot_button(
+    btn_id: str,
+    data: dict,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Частичное обновление кнопки меню — обновляет только переданные поля, остальные сохраняются."""
+    stmt = select(BotText).where(BotText.key == btn_id)
+    result = await db.execute(stmt)
+    btn = result.scalars().first()
+    if not btn:
+        raise HTTPException(status_code=404, detail="Button not found")
+    # Load existing data
+    try:
+        existing = json.loads(btn.value)
+    except Exception:
+        existing = {}
+    # Merge: only update fields that are explicitly provided in request
+    for field in ("text", "callback_data", "url", "row", "image_url"):
+        if field in data:
+            existing[field] = data[field]
+    btn.value = json.dumps(existing, ensure_ascii=False)
+    await db.commit()
+    logger.info(f"Bot button {btn_id} partially updated: {list(data.keys())}")
+    return {"success": True, "id": btn_id, **existing}
 
 
 @router.delete("/bot-buttons/{btn_id}")
