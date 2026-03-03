@@ -1,9 +1,11 @@
 import logging
 import os
+import traceback
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from backend.config import settings
 from backend.database import Base, get_engine
@@ -60,6 +62,24 @@ app = FastAPI(
     lifespan=lifespan,
     servers=[{"url": "/", "description": "Production"}],
 )
+
+
+# ── Global Exception Handler ─────────────────────────────────────
+# Catches ALL unhandled exceptions — logs full traceback, returns readable JSON.
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    logger.error(
+        f"Unhandled exception on {request.method} {request.url.path}\n{tb}"
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "error": str(exc),
+            "path": str(request.url.path),
+        },
+    )
 
 # CORS — разрешаем admin-panel на localhost и production
 allowed_origins = getattr(settings, "ALLOWED_ORIGINS", ["*"])
