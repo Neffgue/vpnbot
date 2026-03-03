@@ -1628,3 +1628,162 @@ async def get_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get statistics",
         )
+
+
+# ═══════════════════════════════════════════════════════════════
+# PATCH alias for bot-buttons (бот использует PATCH)
+# ═══════════════════════════════════════════════════════════════
+
+@router.patch("/bot-buttons/{btn_id}")
+async def patch_bot_button(
+    btn_id: str,
+    data: dict,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """PATCH alias for PUT /bot-buttons/{btn_id} — used by bot admin."""
+    from backend.api.v1.endpoints.admin import update_bot_button
+    return await update_bot_button(btn_id=btn_id, data=data, current_user=current_user, db=db)
+
+
+# ═══════════════════════════════════════════════════════════════
+# SUBSCRIPTION PLANS — изменение цен
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/subscriptions/plans")
+async def get_subscription_plans_admin(
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Получить все тарифные планы (для бота/админки)."""
+    from backend.models.subscription import SubscriptionPlan
+    try:
+        result = await db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.price))
+        plans = result.scalars().all()
+        return [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "price": float(p.price),
+                "duration_days": p.duration_days,
+                "description": p.description or "",
+                "is_active": p.is_active,
+            }
+            for p in plans
+        ]
+    except Exception as e:
+        logger.error(f"Error getting plans: {e}")
+        return []
+
+
+@router.patch("/subscriptions/plans/{plan_id}")
+async def update_subscription_plan_price(
+    plan_id: str,
+    data: dict,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Обновить цену и параметры тарифного плана."""
+    from backend.models.subscription import SubscriptionPlan
+    try:
+        result = await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id)
+        )
+        plan = result.scalars().first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        if "price" in data:
+            plan.price = float(data["price"])
+        if "name" in data:
+            plan.name = data["name"]
+        if "duration_days" in data:
+            plan.duration_days = int(data["duration_days"])
+        if "is_active" in data:
+            plan.is_active = bool(data["is_active"])
+
+        await db.commit()
+        await db.refresh(plan)
+        return {
+            "id": str(plan.id),
+            "name": plan.name,
+            "price": float(plan.price),
+            "duration_days": plan.duration_days,
+            "is_active": plan.is_active,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating plan: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update plan: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# INSTRUCTIONS — управление шагами и изображениями
+# ═══════════════════════════════════════════════════════════════
+
+INSTRUCTION_STEPS_KEY_PREFIX = "instr_"
+
+
+@router.get("/instructions/{device}/steps")
+async def get_instruction_steps_admin(
+    device: str,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Получить шаги инструкции для устройства."""
+    key_prefix = f"{INSTRUCTION_STEPS_KEY_PREFIX}{device}_"
+    try:
+        result = await db.execute(
+            select(BotText).where(BotText.key.like(f"{key_prefix}%")).order_by(BotText.key)
+        )
+        rows = result.scalars().all()
+        steps = []
+        for r in rows:
+            try:
+                step = json.loads(r.value)
+                step["id"] = r.key
+                steps.append(step)
+            except Exception:
+                pass
+        return steps
+    except Exception as e:
+        logger.error(f"Error getting instruction steps: {e}")
+        return []
+
+
+@router.patch("/instructions/{device}/steps/{step_num}")
+async def update_instruction_step(
+    device: str,
+    step_num: int,
+    data: dict,
+    current_user=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Обновить шаг инструкции (изображение и т.д.)."""
+    key = f"{INSTRUCTION_STEPS_KEY_PREFIX}{device}_{step_num:03d}"
+    try:
+        result = await db.execute(select(BotText).where(BotText.key == key))
+        existing = result.scalars().first()
+
+        if existing:
+            step_data = json.loads(existing.value)
+            step_data.update(data)
+            existing.value = json.dumps(step_data, ensure_ascii=False)
+        else:
+            step_data = {"step_number": step_num, "device": device, **data}
+            existing = BotText(
+                id=str(uuid4()),
+                key=key,
+                value=json.dumps(step_data, ensure_ascii=False),
+                description=f"instruction_step_{device}_{step_num}"
+            )
+            db.add(existing)
+
+        await db.commit()
+        return {"success": True, "key": key, **step_data}
+    except Exception as e:
+        logger.error(f"Error updating instruction step: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update step: {e}")

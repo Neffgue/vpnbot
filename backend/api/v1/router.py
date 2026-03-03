@@ -97,6 +97,31 @@ async def auth_logout_compat(
     return {"message": "Logged out successfully"}
 
 
+@api_router.get("/subscriptions/plans", tags=["compat"])
+async def subscriptions_plans_compat(
+    db: AsyncSession = Depends(get_db),
+):
+    """Public alias: GET /subscriptions/plans — returns subscription plans list."""
+    from backend.models.subscription import SubscriptionPlan
+    from sqlalchemy import select
+    try:
+        result = await db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.price))
+        plans = result.scalars().all()
+        return [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "price": float(p.price),
+                "duration_days": p.duration_days,
+                "description": p.description or "",
+                "is_active": p.is_active,
+            }
+            for p in plans
+        ]
+    except Exception:
+        return []
+
+
 @api_router.get("/users", tags=["compat"])
 async def users_list_compat(
     request: Request,
