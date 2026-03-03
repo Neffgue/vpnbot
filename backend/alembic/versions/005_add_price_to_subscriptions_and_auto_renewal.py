@@ -7,8 +7,8 @@ Create Date: 2026-03-03
 from alembic import op
 import sqlalchemy as sa
 
-revision = '005_add_price_and_auto_renewal'
-down_revision = '004_add_auto_renewal'
+revision = '005'
+down_revision = '004'
 branch_labels = None
 depends_on = None
 
