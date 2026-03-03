@@ -7,30 +7,40 @@ logger = logging.getLogger(__name__)
 
 
 def _build_default_buttons(show_free_trial: bool = True) -> list:
-    """Строит список кнопок главного меню. Кнопка пробного периода скрывается если уже использован."""
+    """Строит список кнопок главного меню строго по ТЗ AGENTS.md.
+    Ряд 1: 🎁 Бесплатный доступ | 💸 Оплатить тариф
+    Ряд 2: 👤 Личный кабинет | 🎁 Получить бесплатно
+    Ряд 3: 🔗 Реферальная система | ⚙️ Инструкция по подключению
+    Ряд 4: 👨‍💻 Поддержка | 📢 Наш канал
+    Кнопка пробного периода скрывается если уже использован.
+    """
     buttons = []
+
+    # Ряд 1
+    row1 = []
     if show_free_trial:
-        buttons.append([
-            InlineKeyboardButton(text="🎁 Бесплатный доступ", callback_data="free_trial"),
-        ])
-    buttons += [
-        [
-            InlineKeyboardButton(text="💸 Оплатить тариф", callback_data="buy_subscription"),
-        ],
-        [
-            InlineKeyboardButton(text="👤 Личный кабинет", callback_data="cabinet"),
-        ],
-        [
-            InlineKeyboardButton(text="🔗 Реферальная система", callback_data="partner"),
-            InlineKeyboardButton(text="⚙️ Инструкция по подключению", callback_data="instructions"),
-        ],
-        [
-            InlineKeyboardButton(text="👨‍💻 Поддержка", callback_data="support"),
-        ],
-        [
-            InlineKeyboardButton(text="📢 Наш канал", callback_data="channel"),
-        ],
-    ]
+        row1.append(InlineKeyboardButton(text="🎁 Бесплатный доступ", callback_data="free_trial"))
+    row1.append(InlineKeyboardButton(text="💸 Оплатить тариф", callback_data="buy_subscription"))
+    buttons.append(row1)
+
+    # Ряд 2
+    buttons.append([
+        InlineKeyboardButton(text="👤 Личный кабинет", callback_data="cabinet"),
+        InlineKeyboardButton(text="🎁 Получить бесплатно", callback_data="get_free"),
+    ])
+
+    # Ряд 3
+    buttons.append([
+        InlineKeyboardButton(text="🔗 Реферальная система", callback_data="partner"),
+        InlineKeyboardButton(text="⚙️ Инструкция по подключению", callback_data="instructions"),
+    ])
+
+    # Ряд 4
+    buttons.append([
+        InlineKeyboardButton(text="👨‍💻 Поддержка", callback_data="support"),
+        InlineKeyboardButton(text="📢 Наш канал", callback_data="channel"),
+    ])
+
     return buttons
 
 
