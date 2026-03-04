@@ -112,7 +112,7 @@ if os.path.isdir(ADMIN_DIR):
     app.mount("/admin", StaticFiles(directory=ADMIN_DIR, html=True), name="admin")
     logger.info(f"Admin panel mounted at /admin from {ADMIN_DIR}")
 else:
-    logger.warning(f"Admin panel dist not found at {ADMIN_DIR}, skipping mount")
+    logger.info(f"Admin panel dist not found at {ADMIN_DIR} — served by nginx (OK in Docker)")
 
 # API роутер
 app.include_router(api_router)
