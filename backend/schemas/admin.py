@@ -32,17 +32,19 @@ class PlanPriceCreate(BaseModel):
     price_rub: Decimal
     name: Optional[str] = None
     device_limit: Optional[int] = 1
+    image_url: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = True
 
 
 class PlanPriceUpdate(BaseModel):
-    """Update plan price schema — все поля опциональны для частичного обновления."""
+    """Update plan price schema – все поля опциональные для частичного обновления."""
     plan_name: Optional[str] = None
     period_days: Optional[int] = None
     price_rub: Optional[Decimal] = None
     name: Optional[str] = None
     device_limit: Optional[int] = None
+    image_url: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
 
@@ -55,6 +57,7 @@ class PlanPriceResponse(BaseModel):
     price_rub: Decimal
     name: Optional[str] = None
     device_limit: Optional[int] = 1
+    image_url: Optional[str] = None
     description: Optional[str] = None
     is_active: bool = True
     created_at: datetime

@@ -27,11 +27,12 @@ class XUIServiceMock:
         return True
 
     async def add_client(
-        self, client_uuid: str, traffic_limit_gb: int, expiry_timestamp_ms: int
+        self, client_uuid: str, traffic_limit_gb: int, expiry_timestamp_ms: int,
+        device_limit: int = 1,
     ) -> bool:
         logger.info(
             f"[MOCK] add_client uuid={client_uuid} traffic={traffic_limit_gb}GB "
-            f"expiry={expiry_timestamp_ms} — SUCCESS (mock)"
+            f"expiry={expiry_timestamp_ms} device_limit={device_limit} – SUCCESS (mock)"
         )
         return True
 
@@ -40,10 +41,11 @@ class XUIServiceMock:
         client_uuid: str,
         traffic_limit_gb: Optional[int] = None,
         expiry_timestamp_ms: Optional[int] = None,
+        device_limit: Optional[int] = None,
     ) -> bool:
         logger.info(
             f"[MOCK] update_client uuid={client_uuid} traffic={traffic_limit_gb} "
-            f"expiry={expiry_timestamp_ms} — SUCCESS (mock)"
+            f"expiry={expiry_timestamp_ms} device_limit={device_limit} – SUCCESS (mock)"
         )
         return True
 

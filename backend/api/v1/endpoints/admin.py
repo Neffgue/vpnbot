@@ -1522,6 +1522,8 @@ async def update_plan_price(
             plan.name = plan_data.name
         if plan_data.device_limit is not None:
             plan.device_limit = plan_data.device_limit
+        if plan_data.image_url is not None:
+            plan.image_url = plan_data.image_url
         if plan_data.description is not None:
             plan.description = plan_data.description
         if plan_data.is_active is not None:
@@ -1794,24 +1796,30 @@ async def get_subscription_plans_admin(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Получить все тарифные планы (для бота/админки)."""
-    from backend.models.subscription import SubscriptionPlan
+    """Получить все тарифные планы из PlanPrice (единый источник истины для бота и фронтенда)."""
     try:
-        result = await db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.price))
+        stmt = select(PlanPrice).where(PlanPrice.is_active == True).order_by(PlanPrice.plan_name, PlanPrice.period_days)
+        result = await db.execute(stmt)
         plans = result.scalars().all()
         return [
             {
                 "id": str(p.id),
-                "name": p.name,
-                "price": float(p.price),
-                "duration_days": p.duration_days,
+                "plan_name": p.plan_name,
+                "name": p.name or p.plan_name.capitalize(),
+                "price_rub": float(p.price_rub),
+                "price": float(p.price_rub),
+                "period_days": p.period_days,
+                "duration_days": p.period_days,
+                "device_limit": p.device_limit if p.device_limit is not None else 1,
+                "devices": p.device_limit if p.device_limit is not None else 1,
+                "image_url": p.image_url or "",
                 "description": p.description or "",
                 "is_active": p.is_active,
             }
             for p in plans
         ]
     except Exception as e:
-        logger.error(f"Error getting plans: {e}")
+        logger.error(f"Error getting plans: {e}", exc_info=True)
         return []
 
 

@@ -48,7 +48,8 @@ class XUIService:
             return False
 
     async def add_client(
-        self, client_uuid: str, traffic_limit_gb: int, expiry_timestamp_ms: int
+        self, client_uuid: str, traffic_limit_gb: int, expiry_timestamp_ms: int,
+        device_limit: int = 1,
     ) -> bool:
         """Add a client to inbound."""
         try:
@@ -64,7 +65,7 @@ class XUIService:
                 "id": client_uuid,
                 "alterId": 0,
                 "email": f"client_{client_uuid}",
-                "limitIp": 1,
+                "limitIp": device_limit,
                 "totalGB": traffic_limit_bytes,
                 "expiryTime": expiry_timestamp_ms,
                 "tls": "tls",
@@ -89,6 +90,7 @@ class XUIService:
         client_uuid: str,
         traffic_limit_gb: Optional[int] = None,
         expiry_timestamp_ms: Optional[int] = None,
+        device_limit: Optional[int] = None,
     ) -> bool:
         """Update client traffic limit and/or expiry."""
         try:
@@ -104,6 +106,9 @@ class XUIService:
 
             if expiry_timestamp_ms is not None:
                 payload["expiryTime"] = expiry_timestamp_ms
+
+            if device_limit is not None:
+                payload["limitIp"] = device_limit
 
             if not payload:
                 logger.warning("No updates specified for client")
