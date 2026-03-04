@@ -153,7 +153,17 @@ async def cabinet_handler(callback: CallbackQuery, state: FSMContext) -> None:
             if sub_link:
                 cabinet_text += f"<b>🔑 Ваша подписка:</b>\n{sub_link}\n\n"
 
-            if subscription:
+            # Проверяем что подписка реально активна (не пустой dict)
+            has_active_subscription = bool(
+                subscription.get('is_active') or
+                subscription.get('vpn_key') or
+                subscription.get('key') or
+                subscription.get('subscription_link') or
+                subscription.get('expires_at') or
+                subscription.get('expire_date')
+            )
+
+            if has_active_subscription:
                 cabinet_text += (
                     f"<b>📦 Информация о тарифе:</b>\n"
                     f"<blockquote>"

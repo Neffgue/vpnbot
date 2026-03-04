@@ -1,4 +1,5 @@
-"""Payment flow handler вЂ” С‚Р°СЂРёС„С‹ Рё С†РµРЅС‹ Р·Р°РіСЂСѓР¶Р°СЋС‚СЃСЏ РёР· Р‘Р” С‡РµСЂРµР· API (Single Source of Truth)."""
+# -*- coding: utf-8 -*-
+"""Payment flow handler — тарифы и цены загружаются из БД через API (Single Source of Truth)."""
 
 import logging
 from typing import Optional
@@ -21,25 +22,25 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-# Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ С‚Р°СЂРёС„Р°РјРё РёР· API
-# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ═══════════════════════════════════════════════════════════════════════════════
+# Тарифы и цены загружаются из БД через API
+# ═══════════════════════════════════════════════════════════════════════════════
 
 PERIOD_LABELS = {
-    7: "7 РґРЅРµР№",
-    14: "14 РґРЅРµР№",
-    30: "1 РјРµСЃСЏС†",
-    60: "2 РјРµСЃСЏС†Р°",
-    90: "3 РјРµСЃСЏС†Р°",
-    180: "6 РјРµСЃСЏС†РµРІ",
-    365: "12 РјРµСЃСЏС†РµРІ",
+    7: "7 дней",
+    14: "14 дней",
+    30: "1 месяц",
+    60: "2 месяца",
+    90: "3 месяца",
+    180: "6 месяцев",
+    365: "12 месяцев",
 }
 
 FALLBACK_PLANS = [
     {
         "id": "solo",
         "plan_name": "solo",
-        "name": "рџ‘¤ РЎРѕР»Рѕ (1 СѓСЃС‚СЂРѕР№СЃС‚РІРѕ)",
+        "name": "Соло (1 устройство)",
         "devices": 1,
         "period_days": 30,
         "price": 150,
@@ -48,7 +49,7 @@ FALLBACK_PLANS = [
     {
         "id": "family",
         "plan_name": "family",
-        "name": "рџ‘ЁвЂЌрџ‘©вЂЌрџ‘§вЂЌрџ‘¦ РЎРµРјРµР№РЅС‹Р№ (5 СѓСЃС‚СЂРѕР№СЃС‚РІ)",
+        "name": "Семейный (5 устройств)",
         "devices": 5,
         "period_days": 30,
         "price": 250,
@@ -58,7 +59,7 @@ FALLBACK_PLANS = [
 
 
 async def _fetch_plans(api: APIClient) -> list:
-    """Р—Р°РіСЂСѓР·РёС‚СЊ С‚Р°СЂРёС„С‹ РёР· API. РџСЂРё РѕС€РёР±РєРµ вЂ” РІРµСЂРЅСѓС‚СЊ fallback-Р·РЅР°С‡РµРЅРёСЏ."""
+    """Загружает тарифы из API. При ошибке возвращает fallback-варианты."""
     try:
         plans = await api.get_subscription_plans()
         if plans:
@@ -69,11 +70,11 @@ async def _fetch_plans(api: APIClient) -> list:
 
 
 def _group_plans_by_name(plans: list) -> dict:
-    """РЎРіСЂСѓРїРїРёСЂРѕРІР°С‚СЊ С‚Р°СЂРёС„С‹ РїРѕ plan_name в†’ СЃРїРёСЃРѕРє РїРµСЂРёРѕРґРѕРІ.
+    """Группирует тарифы по plan_name для отображения в меню выбора.
 
-    РџРѕРґРґРµСЂР¶РёРІР°РµС‚ РѕР±Р° РІР°СЂРёР°РЅС‚Р° РёРјРµРЅРё РїРѕР»СЏ С†РµРЅС‹:
-    - price_rub (СЃС…РµРјР° Р‘Р” PlanPrice)
-    - price (РѕР±С‰РёР№ РІР°СЂРёР°РЅС‚)
+    Поддерживает оба формата ответа сервера:
+    - price_rub (поле из PlanPrice)
+    - price (старый формат)
     """
     grouped: dict = {}
     for plan in plans:
@@ -84,9 +85,10 @@ def _group_plans_by_name(plans: list) -> dict:
                 "name": plan.get("name", key.capitalize()),
                 "devices": plan.get("devices", plan.get("device_limit", 1)),
                 "periods": {},
+                "image_url": plan.get("image_url", ""),
             }
         days = int(plan.get("period_days", 30))
-        # РџРѕРґРґРµСЂР¶РєР° РѕР±РѕРёС… РїРѕР»РµР№: price_rub (РёР· Р‘Р”) Рё price (РѕР±С‰РёР№)
+        # Приоритет цены: сначала price_rub (из БД), затем price (старый)
         price = float(
             plan.get("price_rub")
             or plan.get("price")
@@ -97,34 +99,34 @@ def _group_plans_by_name(plans: list) -> dict:
 
 
 def _build_plan_keyboard(grouped: dict) -> InlineKeyboardMarkup:
-    """РљР»Р°РІРёР°С‚СѓСЂР° РІС‹Р±РѕСЂР° С‚Р°СЂРёС„РЅРѕРіРѕ РїР»Р°РЅР° (СЃС‚СЂРѕРєРё = РѕС‚РґРµР»СЊРЅС‹Рµ РїР»Р°РЅС‹)."""
+    """Формирует клавиатуру выбора тарифа (тариф = отдельная кнопка)."""
     rows = []
     for key, info in grouped.items():
-        label = f"{info['name']} вЂ” {info['devices']} СѓСЃС‚."
+        label = f"{info['name']} — {info['devices']} уст."
         rows.append([InlineKeyboardButton(text=label, callback_data=f"plan_{key}")])
-    rows.append([InlineKeyboardButton(text="в—ЂпёЏ РќР°Р·Р°Рґ", callback_data="back_to_menu")])
+    rows.append([InlineKeyboardButton(text="◀️ В меню", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _build_period_keyboard(plan_key: str, periods: dict) -> InlineKeyboardMarkup:
-    """РљР»Р°РІРёР°С‚СѓСЂР° РІС‹Р±РѕСЂР° РїРµСЂРёРѕРґР° РїРѕРґРїРёСЃРєРё СЃ С†РµРЅР°РјРё РёР· Р‘Р”."""
+    """Формирует клавиатуру выбора периода подписки с ценами из БД."""
     rows = []
     for days in sorted(periods.keys()):
         price = periods[days]
-        label_day = PERIOD_LABELS.get(int(days), f"{days} РґРЅРµР№")
-        label = f"{label_day} вЂ” {int(price)} в‚Ѕ"
+        label_day = PERIOD_LABELS.get(int(days), f"{days} дней")
+        label = f"{label_day} — {int(price)} ₽"
         rows.append([InlineKeyboardButton(text=label, callback_data=f"period_{days}")])
-    rows.append([InlineKeyboardButton(text="в—ЂпёЏ РќР°Р·Р°Рґ", callback_data="back_to_plans")])
+    rows.append([InlineKeyboardButton(text="◀️ Назад к тарифам", callback_data="back_to_plans")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ═══════════════════════════════════════════════════════════════════════════════
 # Handlers
-# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "buy_subscription")
 async def buy_subscription_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    """РџРѕРєР°Р·Р°С‚СЊ СЃРїРёСЃРѕРє С‚Р°СЂРёС„РЅС‹С… РїР»Р°РЅРѕРІ, Р·Р°РіСЂСѓР¶РµРЅРЅС‹С… РёР· Р‘Р”."""
+    """Показывает список тарифов: группы, доступные для выбора."""
     await callback.answer()
 
     async with APIClient(config.api.base_url, config.api.api_key) as api:
@@ -132,14 +134,14 @@ async def buy_subscription_handler(callback: CallbackQuery, state: FSMContext) -
 
     grouped = _group_plans_by_name(plans)
 
-    # РЎРѕС…СЂР°РЅСЏРµРј СЃРіСЂСѓРїРїРёСЂРѕРІР°РЅРЅС‹Рµ РїР»Р°РЅС‹ РІ state РґР»СЏ РїРѕСЃР»РµРґСѓСЋС‰РёС… С€Р°РіРѕРІ
+    # Сохраняем сгруппированные планы в state для использования в следующих шагах
     await state.update_data(grouped_plans=grouped)
     await state.set_state(PaymentStates.waiting_plan_selection)
 
     plan_text = (
-        "вљЎпёЏ <b>Р’С‹Р±РµСЂРёС‚Рµ С‚Р°СЂРёС„ РёР· РїСЂРµРґР»РѕР¶РµРЅРЅС‹С…</b>\n\n"
-        "РљР°Р¶РґС‹Р№ С‚Р°СЂРёС„ РїРѕР·РІРѕР»СЏРµС‚ РїРѕРґРєР»СЋС‡РёС‚СЊ РѕРїСЂРµРґРµР»С‘РЅРЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СѓСЃС‚СЂРѕР№СЃС‚РІ Рє VPN.\n\n"
-        "Р’ Р»СЋР±РѕР№ РјРѕРјРµРЅС‚ РІС‹ СЃРјРѕР¶РµС‚Рµ СѓР»СѓС‡С€РёС‚СЊ СЃРІРѕР№ С‚Р°СЂРёС„ РЅР° Р±РѕР»СЊС€РµРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СѓСЃС‚СЂРѕР№СЃС‚РІ!"
+        "⚡️ <b>Выберите тариф из предложенных:</b>\n\n"
+        "Каждый тариф позволяет подключить определённое количество устройств к VPN.\n\n"
+        "В каждом тарифе вы сможете выбрать удобный период подписки!"
     )
 
     try:
@@ -154,7 +156,7 @@ async def buy_subscription_handler(callback: CallbackQuery, state: FSMContext) -
 
 @router.callback_query(F.data.startswith("plan_"), PaymentStates.waiting_plan_selection)
 async def select_plan(callback: CallbackQuery, state: FSMContext) -> None:
-    """Р’С‹Р±РѕСЂ С‚Р°СЂРёС„РЅРѕРіРѕ РїР»Р°РЅР° вЂ” РїРѕРєР°Р·С‹РІР°РµРј РїРµСЂРёРѕРґС‹ СЃ С†РµРЅР°РјРё РёР· Р‘Р”."""
+    """Выбор конкретного тарифа → предлагает периоды с ценами из БД."""
     await callback.answer()
 
     plan_key = callback.data.replace("plan_", "")
@@ -162,7 +164,7 @@ async def select_plan(callback: CallbackQuery, state: FSMContext) -> None:
     grouped = data.get("grouped_plans", {})
 
     if not grouped:
-        # РџРµСЂРµР·Р°РіСЂСѓР¶Р°РµРј РµСЃР»Рё state РїСѓСЃС‚РѕР№
+        # Перезагружаем если state протух
         async with APIClient(config.api.base_url, config.api.api_key) as api:
             plans = await _fetch_plans(api)
         grouped = _group_plans_by_name(plans)
@@ -170,61 +172,74 @@ async def select_plan(callback: CallbackQuery, state: FSMContext) -> None:
 
     plan_info = grouped.get(plan_key)
     if not plan_info:
-        await callback.answer("РўР°СЂРёС„ РЅРµ РЅР°Р№РґРµРЅ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.", show_alert=True)
+        await callback.answer("Тариф не найден. Попробуйте ещё раз.", show_alert=True)
         return
 
     await state.update_data(selected_plan_key=plan_key, selected_plan_info=plan_info)
     await state.set_state(PaymentStates.waiting_period_selection)
 
     period_text = (
-        f"рџ“… <b>Р’С‹Р±РµСЂРёС‚Рµ РїРµСЂРёРѕРґ РїРѕРґРїРёСЃРєРё</b>\n\n"
-        f"РўР°СЂРёС„: <b>{plan_info['name']}</b>\n"
-        f"РЈСЃС‚СЂРѕР№СЃС‚РІ: <b>{plan_info['devices']}</b>\n\n"
-        "РЈС‡С‚РёС‚Рµ! Р§РµРј Р±РѕР»СЊС€Рµ РїРµСЂРёРѕРґ, С‚РµРј РЅРёР¶Рµ С†РµРЅР° рџ’µ"
+        f"💎 <b>Выберите период подписки</b>\n\n"
+        f"Тариф: <b>{plan_info['name']}</b>\n"
+        f"Устройств: <b>{plan_info['devices']}</b>\n\n"
+        "Чем дольше период — тем ниже цена! 💵"
     )
+
+    # Показываем с картинкой тарифа, если есть
+    image_url = plan_info.get("image_url", "")
+    cover = resolve_media(image_url) if image_url else None
+
+    keyboard = _build_period_keyboard(plan_key, plan_info.get("periods", {}))
+
+    if cover:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        try:
+            await callback.bot.send_photo(
+                chat_id=callback.from_user.id,
+                photo=cover,
+                caption=period_text,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+            return
+        except Exception as e:
+            logger.error(f"Failed to send plan cover: {e}")
 
     try:
         await callback.message.edit_text(
-            period_text,
-            parse_mode="HTML",
-            reply_markup=_build_period_keyboard(plan_key, plan_info["periods"]),
+            period_text, parse_mode="HTML", reply_markup=keyboard
         )
     except Exception:
         await callback.message.answer(
-            period_text,
-            parse_mode="HTML",
-            reply_markup=_build_period_keyboard(plan_key, plan_info["periods"]),
+            period_text, parse_mode="HTML", reply_markup=keyboard
         )
 
 
 @router.callback_query(F.data.startswith("period_"), PaymentStates.waiting_period_selection)
 async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
-    """Р’С‹Р±РѕСЂ РїРµСЂРёРѕРґР° вЂ” РїРѕРєР°Р·С‹РІР°РµРј РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ СЃ С†РµРЅРѕР№ РёР· Р‘Р”."""
+    """Выбор периода → запоминает цену и переходит к способу оплаты."""
     await callback.answer()
 
     period_days = int(callback.data.replace("period_", ""))
     data = await state.get_data()
-    plan_key = data.get("selected_plan_key", "solo")
     plan_info = data.get("selected_plan_info", {})
     periods = plan_info.get("periods", {})
-    price = periods.get(period_days, periods.get(str(period_days), 150))
+    price = periods.get(period_days, 0)
 
-    await state.update_data(
-        period_days=period_days,
-        price=price,
-        yookassa_link="",
-        invoice_payload=f"vpn_{plan_key}_{period_days}",
-    )
+    await state.update_data(period_days=period_days, price=price)
     await state.set_state(PaymentStates.waiting_payment_method)
 
-    payment_text = format_payment_confirmation(
+    confirmation_text = format_payment_confirmation(
         plan_name=plan_info.get("name", "VPN"),
         period_days=period_days,
         price=price,
         currency="RUB",
     )
 
-    # РџРѕРєР°Р·С‹РІР°РµРј РєР°СЂС‚РёРЅРєСѓ С‚Р°СЂРёС„Р° РµСЃР»Рё РµСЃС‚СЊ
+    # Показываем картинку тарифа при подтверждении, если есть
     image_url = plan_info.get("image_url", "")
     cover = resolve_media(image_url) if image_url else None
 
@@ -237,23 +252,23 @@ async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.bot.send_photo(
                 chat_id=callback.from_user.id,
                 photo=cover,
-                caption=payment_text,
+                caption=confirmation_text,
                 parse_mode="HTML",
                 reply_markup=get_payment_method_keyboard(),
             )
             return
         except Exception as e:
-            logger.error(f"Failed to send period cover photo: {e}")
+            logger.error(f"Failed to send plan cover photo: {e}")
 
     try:
         await callback.message.edit_text(
-            payment_text,
+            confirmation_text,
             parse_mode="HTML",
             reply_markup=get_payment_method_keyboard(),
         )
     except Exception:
         await callback.message.answer(
-            payment_text,
+            confirmation_text,
             parse_mode="HTML",
             reply_markup=get_payment_method_keyboard(),
         )
@@ -261,101 +276,42 @@ async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "pay_stars", PaymentStates.waiting_payment_method)
 async def pay_with_stars(callback: CallbackQuery, state: FSMContext) -> None:
-    """РћРїР»Р°С‚Р° Telegram Stars вЂ” РѕС‚РїСЂР°РІР»СЏРµРј invoice."""
+    """Оплата через Telegram Stars."""
     await callback.answer()
 
     data = await state.get_data()
     plan_info = data.get("selected_plan_info", {})
     period_days = data.get("period_days", 30)
-    price = data.get("price", 0)
-    invoice_payload = data.get("invoice_payload", f"vpn_sub_{callback.from_user.id}_{period_days}")
-    plan_name = plan_info.get("name", "VPN РџРѕРґРїРёСЃРєР°")
+    price_rub = float(data.get("price", 0))
+
+    # Конвертируем рубли в звёзды (примерно 1 звезда = 1.5 руб)
+    stars = max(1, int(price_rub / 1.5))
+
+    plan_name = plan_info.get("name", "VPN")
+    period_label = PERIOD_LABELS.get(int(period_days), f"{period_days} дней")
+    title = f"VPN: {plan_name}"
+    description = f"Подписка на {period_label}"
 
     try:
-        prices = [LabeledPrice(label="РџРѕРґРїРёСЃРєР° VPN", amount=int(float(price) * 100))]
         await callback.bot.send_invoice(
             chat_id=callback.from_user.id,
-            title=plan_name,
-            description=f"РџРѕРґРїРёСЃРєР° РЅР° {period_days} РґРЅРµР№",
-            payload=invoice_payload,
-            provider_token="",  # Telegram Stars вЂ” РїСѓСЃС‚РѕР№ С‚РѕРєРµРЅ
+            title=title,
+            description=description,
+            payload=f"vpn_{plan_info.get('key', 'solo')}_{period_days}",
+            provider_token="",  # Пустой для Stars
             currency="XTR",
-            prices=prices,
-            start_parameter="vpn_subscription",
+            prices=[LabeledPrice(label=title, amount=stars)],
         )
-        try:
-            await callback.message.edit_text(
-                "в­ђ РЎС‡С‘С‚ РґР»СЏ РѕРїР»Р°С‚С‹ РѕС‚РїСЂР°РІР»РµРЅ. РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ <b>РћРїР»Р°С‚РёС‚СЊ</b> РІ СЃРѕРѕР±С‰РµРЅРёРё РІС‹С€Рµ.",
-                parse_mode="HTML",
-                reply_markup=get_main_menu(),
-            )
-        except Exception:
-            await callback.message.answer(
-                "в­ђ РЎС‡С‘С‚ РґР»СЏ РѕРїР»Р°С‚С‹ РѕС‚РїСЂР°РІР»РµРЅ. РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ <b>РћРїР»Р°С‚РёС‚СЊ</b> РІ СЃРѕРѕР±С‰РµРЅРёРё РІС‹С€Рµ.",
-                parse_mode="HTML",
-                reply_markup=get_main_menu(),
-            )
     except Exception as e:
-        logger.error(f"Error sending Stars invoice: {e}", exc_info=True)
-        try:
-            await callback.message.edit_text(
-                "вќЊ РћС€РёР±РєР° РїСЂРё РѕС‚РїСЂР°РІРєРµ СЃС‡С‘С‚Р°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.",
-                reply_markup=get_main_menu(),
-            )
-        except Exception:
-            await callback.message.answer(
-                "вќЊ РћС€РёР±РєР° РїСЂРё РѕС‚РїСЂР°РІРєРµ СЃС‡С‘С‚Р°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.",
-                reply_markup=get_main_menu(),
-            )
-
-
-@router.callback_query(F.data == "pay_yookassa", PaymentStates.waiting_payment_method)
-async def pay_with_yookassa(callback: CallbackQuery, state: FSMContext) -> None:
-    """РћРїР»Р°С‚Р° YooKassa вЂ” РїРѕРєР°Р·С‹РІР°РµРј СЃСЃС‹Р»РєСѓ."""
-    await callback.answer()
-
-    data = await state.get_data()
-    yookassa_link = data.get("yookassa_link", "")
-
-    if not yookassa_link:
-        try:
-            await callback.message.edit_text(
-                "вќЊ РЎСЃС‹Р»РєР° РЅР° РѕРїР»Р°С‚Сѓ РЅРµРґРѕСЃС‚СѓРїРЅР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.",
-                reply_markup=get_main_menu(),
-            )
-        except Exception:
-            await callback.message.answer(
-                "вќЊ РЎСЃС‹Р»РєР° РЅР° РѕРїР»Р°С‚Сѓ РЅРµРґРѕСЃС‚СѓРїРЅР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.",
-                reply_markup=get_main_menu(),
-            )
-        return
-
-    text = (
-        "рџ’і <b>РџРµСЂРµР№РґРёС‚Рµ РїРѕ СЃСЃС‹Р»РєРµ РґР»СЏ РѕРїР»Р°С‚С‹ С‡РµСЂРµР· YooKassa</b>\n\n"
-        "Р”РѕСЃС‚СѓРїРЅС‹Рµ СЃРїРѕСЃРѕР±С‹ РѕРїР»Р°С‚С‹:\n"
-        "вЂў РљР°СЂС‚Р° Visa/Mastercard/РњРёСЂ\n"
-        "вЂў РЎР‘Рџ (РїРµСЂРµРІРѕРґС‹ РїРѕ РЅРѕРјРµСЂСѓ С‚РµР»РµС„РѕРЅР°)\n"
-        "вЂў РЇРЅРґРµРєСЃ.РљР°СЃСЃР°\n"
-        "вЂў Apple Pay, Google Pay\n\n"
-        "РџРѕСЃР»Рµ СѓСЃРїРµС€РЅРѕР№ РѕРїР»Р°С‚С‹ РІР°Рј Р±СѓРґРµС‚ РѕС‚РїСЂР°РІР»РµРЅР° СЃСЃС‹Р»РєР° РґР»СЏ РїРѕРґРєР»СЋС‡РµРЅРёСЏ."
-    )
-    try:
-        await callback.message.edit_text(
-            text, parse_mode="HTML", reply_markup=get_subscription_link_keyboard(yookassa_link)
-        )
-    except Exception:
+        logger.error(f"Failed to send invoice: {e}")
         await callback.message.answer(
-            text, parse_mode="HTML", reply_markup=get_subscription_link_keyboard(yookassa_link)
+            "❌ Ошибка при создании счёта. Попробуйте позже или обратитесь в поддержку."
         )
 
-
-# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-# РќР°РІРёРіР°С†РёСЏ РЅР°Р·Р°Рґ
-# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 @router.callback_query(F.data == "back_to_plans")
 async def back_to_plans(callback: CallbackQuery, state: FSMContext) -> None:
-    """Р’РµСЂРЅСѓС‚СЊСЃСЏ Рє РІС‹Р±РѕСЂСѓ С‚Р°СЂРёС„РЅРѕРіРѕ РїР»Р°РЅР°."""
+    """Возврат к выбору тарифа."""
     await callback.answer()
 
     data = await state.get_data()
@@ -370,9 +326,9 @@ async def back_to_plans(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(PaymentStates.waiting_plan_selection)
 
     plan_text = (
-        "вљЎпёЏ <b>Р’С‹Р±РµСЂРёС‚Рµ С‚Р°СЂРёС„ РёР· РїСЂРµРґР»РѕР¶РµРЅРЅС‹С…</b>\n\n"
-        "РљР°Р¶РґС‹Р№ С‚Р°СЂРёС„ РїРѕР·РІРѕР»СЏРµС‚ РїРѕРґРєР»СЋС‡РёС‚СЊ РѕРїСЂРµРґРµР»С‘РЅРЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СѓСЃС‚СЂРѕР№СЃС‚РІ Рє VPN.\n\n"
-        "Р’ Р»СЋР±РѕР№ РјРѕРјРµРЅС‚ РІС‹ СЃРјРѕР¶РµС‚Рµ СѓР»СѓС‡С€РёС‚СЊ СЃРІРѕР№ С‚Р°СЂРёС„ РЅР° Р±РѕР»СЊС€РµРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СѓСЃС‚СЂРѕР№СЃС‚РІ!"
+        "⚡️ <b>Выберите тариф из предложенных:</b>\n\n"
+        "Каждый тариф позволяет подключить определённое количество устройств к VPN.\n\n"
+        "В каждом тарифе вы сможете выбрать удобный период подписки!"
     )
 
     try:
@@ -387,7 +343,7 @@ async def back_to_plans(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "back_to_payment")
 async def back_to_payment(callback: CallbackQuery, state: FSMContext) -> None:
-    """Р’РµСЂРЅСѓС‚СЊСЃСЏ Рє РІС‹Р±РѕСЂСѓ РїРµСЂРёРѕРґР°."""
+    """Возврат к выбору периода."""
     await callback.answer()
 
     data = await state.get_data()
@@ -397,10 +353,10 @@ async def back_to_payment(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(PaymentStates.waiting_period_selection)
 
     period_text = (
-        f"рџ“… <b>Р’С‹Р±РµСЂРёС‚Рµ РїРµСЂРёРѕРґ РїРѕРґРїРёСЃРєРё</b>\n\n"
-        f"РўР°СЂРёС„: <b>{plan_info.get('name', 'VPN')}</b>\n"
-        f"РЈСЃС‚СЂРѕР№СЃС‚РІ: <b>{plan_info.get('devices', 1)}</b>\n\n"
-        "РЈС‡С‚РёС‚Рµ! Р§РµРј Р±РѕР»СЊС€Рµ РїРµСЂРёРѕРґ, С‚РµРј РЅРёР¶Рµ С†РµРЅР° рџ’µ"
+        f"💎 <b>Выберите период подписки</b>\n\n"
+        f"Тариф: <b>{plan_info.get('name', 'VPN')}</b>\n"
+        f"Устройств: <b>{plan_info.get('devices', 1)}</b>\n\n"
+        "Чем дольше период — тем ниже цена! 💵"
     )
 
     try:
@@ -419,13 +375,13 @@ async def back_to_payment(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "back_to_periods")
 async def back_to_periods(callback: CallbackQuery, state: FSMContext) -> None:
-    """РђР»РёР°СЃ back_to_payment вЂ” РІРѕР·РІСЂР°С‚ Рє РїРµСЂРёРѕРґР°Рј."""
+    """Псевдоним back_to_payment для возврата к периодам."""
     await back_to_payment(callback, state)
 
 
 @router.callback_query(F.data == "confirm_payment", PaymentStates.waiting_period_selection)
 async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    """РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РѕРїР»Р°С‚С‹ вЂ” РїРµСЂРµС…РѕРґРёРј Рє РІС‹Р±РѕСЂСѓ РјРµС‚РѕРґР° РѕРїР»Р°С‚С‹."""
+    """Переходит к выбору способа оплаты после выбора тарифа."""
     await callback.answer()
 
     data = await state.get_data()
@@ -440,7 +396,7 @@ async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) ->
         currency="RUB",
     )
 
-    # РџРѕРєР°Р·С‹РІР°РµРј РєР°СЂС‚РёРЅРєСѓ С‚Р°СЂРёС„Р° РµСЃР»Рё РµСЃС‚СЊ
+    # Показываем картинку тарифа если есть
     image_url = plan_info.get("image_url", "")
     cover = resolve_media(image_url) if image_url else None
 
@@ -474,5 +430,4 @@ async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) ->
             parse_mode="HTML",
             reply_markup=get_payment_method_keyboard(),
         )
-
     await state.set_state(PaymentStates.waiting_payment_method)

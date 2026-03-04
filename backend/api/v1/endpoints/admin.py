@@ -1472,18 +1472,23 @@ async def create_plan_price(
             plan_name=plan_data.plan_name,
             period_days=plan_data.period_days,
             price_rub=plan_data.price_rub,
+            name=plan_data.name,
+            device_limit=plan_data.device_limit if plan_data.device_limit is not None else 1,
+            description=plan_data.description,
+            is_active=plan_data.is_active if plan_data.is_active is not None else True,
         )
         db.add(plan_price)
         await db.commit()
         await db.refresh(plan_price)
+        await _invalidate_bot_cache("bot:plans")
         logger.info(f"Plan price created: {plan_data.plan_name} {plan_data.period_days}d")
         return plan_price
     except Exception as e:
-        logger.error(f"Error creating plan price: {e}")
+        logger.error(f"Error creating plan price: {e}", exc_info=True)
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create plan price",
+            detail=f"Failed to create plan price: {str(e)}",
         )
 
 
@@ -1505,6 +1510,14 @@ async def update_plan_price(
             plan.period_days = plan_data.period_days
         if plan_data.price_rub is not None:
             plan.price_rub = plan_data.price_rub
+        if plan_data.name is not None:
+            plan.name = plan_data.name
+        if plan_data.device_limit is not None:
+            plan.device_limit = plan_data.device_limit
+        if plan_data.description is not None:
+            plan.description = plan_data.description
+        if plan_data.is_active is not None:
+            plan.is_active = plan_data.is_active
         await db.commit()
         await db.refresh(plan)
         await _invalidate_bot_cache("bot:plans")
@@ -1515,7 +1528,7 @@ async def update_plan_price(
     except Exception as e:
         logger.error(f"Error updating plan: {e}", exc_info=True)
         await db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to update plan price")
+        raise HTTPException(status_code=500, detail=f"Failed to update plan price: {str(e)}")
 
 
 @router.delete("/plans/{plan_id}")
