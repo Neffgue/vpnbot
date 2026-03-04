@@ -1,1 +1,0 @@
-# Middlewares tests package

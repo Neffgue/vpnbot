@@ -17,6 +17,40 @@
 .pydevproject
 *.iml
 
+# Mусорные файлы проекта
+remnawave-bedolaga-telegram-bot-main/
+acli.exe
+AGENTS*.md
+AGENTS*.MD
+Back.md
+ADMIN_PANEL_GUIDE.md
+ALWAYSDATA_DEPLOY.md
+ARCHITECTURE.md
+CODEBASE_ANALYSIS.md
+CURRENT_STATE_ANALYSIS.md
+DEPLOY.md
+DEPLOYMENT.md
+DEPLOYMENT_CHECKLIST.md
+EXECUTIVE_SUMMARY.md
+IMPLEMENTATION_SUMMARY.md
+INFRASTRUCTURE.md
+INTEGRATION_GUIDE.md
+README_*.md
+REFERENCE_ARCHITECTURE_ANALYSIS.md
+REMNAWAVE_*.md
+remnawave_*.md
+SETUP_GUIDE.md
+SYNC_*.md
+SYNCHRONIZATION_ANALYSIS.md
+backend/API_DOCUMENTATION.md
+backend/ARCHITECTURE.md
+backend/DEPLOYMENT.md
+backend/QUICKSTART.md
+backend/README.md
+backend/SUMMARY.md
+backend/TESTING.md
+backend/VERIFICATION.md
+
 # Python
 __pycache__/
 *.py[cod]
