@@ -219,7 +219,6 @@ async def partner_handler(callback: CallbackQuery, state: FSMContext) -> None:
                     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
                 except Exception:
                     await callback.message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
-                )
 
     except Exception as e:
         logger.error(f"Unexpected error in partner_handler: {e}")
