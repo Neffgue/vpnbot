@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 
 from bot.config import config
 from bot.utils.api_client import APIClient
-from bot.utils.media import resolve_media
+from bot.utils.media import resolve_media, get_section_media
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +37,13 @@ async def support_handler(callback: CallbackQuery, state: FSMContext) -> None:
             settings = await client.get_bot_settings()
             if settings:
                 support_url = settings.get("support_url") or SUPPORT_URL_FALLBACK
-                raw_img = settings.get("support_image") or ""
-                if raw_img:
-                    cover_media = resolve_media(raw_img)
 
             texts = await client.get_all_bot_texts()
             if texts:
                 support_text = texts.get("support_text") or support_text
+
+            # Берём медиа: сначала из settings, потом из image_url кнопки "support"
+            cover_media = await get_section_media(client, "support_image", "support")
     except Exception as e:
         logger.warning(f"Failed to load support settings from API: {e}")
 

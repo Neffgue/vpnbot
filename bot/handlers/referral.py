@@ -10,7 +10,7 @@ from bot.config import config
 from bot.keyboards.main_menu import get_main_menu
 from bot.keyboards.inline_kb import get_back_button
 from bot.utils.api_client import APIClient
-from bot.utils.media import resolve_media as _resolve_media
+from bot.utils.media import resolve_media as _resolve_media, get_section_media
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +54,8 @@ async def get_free_handler(callback: CallbackQuery, state: FSMContext) -> None:
             ref_link = referral_data.get("referral_link", f"https://t.me/{BOT_USERNAME}?start=ref{user_id}")
             referrals_count = referral_data.get("referrals_count", 0)
 
-            # Загружаем обложку из настроек
-            cover_media = None
-            try:
-                settings = await client.get_bot_settings()
-                raw_img = settings.get("referral_image") or ""
-                cover_media = _resolve_media(raw_img) if raw_img else None
-            except Exception:
-                pass
+            # Загружаем медиа: сначала из settings, потом из image_url кнопки "get_free"
+            cover_media = await get_section_media(client, "referral_image", "get_free")
 
             # Определяем уровень
             if referrals_count >= 10:

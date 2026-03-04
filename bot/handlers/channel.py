@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 
 from bot.config import config
 from bot.utils.api_client import APIClient
-from bot.utils.media import resolve_media
+from bot.utils.media import resolve_media, get_section_media
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +37,13 @@ async def channel_handler(callback: CallbackQuery, state: FSMContext) -> None:
             settings = await client.get_bot_settings()
             if settings:
                 channel_url = settings.get("channel_url") or CHANNEL_URL_FALLBACK
-                raw_img = settings.get("channel_image") or ""
-                if raw_img:
-                    cover_media = resolve_media(raw_img)
 
             texts = await client.get_all_bot_texts()
             if texts:
                 channel_text = texts.get("channel_text") or channel_text
+
+            # Берём медиа: сначала из settings, потом из image_url кнопки "channel"
+            cover_media = await get_section_media(client, "channel_image", "channel")
     except Exception as e:
         logger.warning(f"Failed to load channel settings from API: {e}")
 

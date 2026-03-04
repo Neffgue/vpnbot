@@ -11,7 +11,7 @@ from bot.keyboards.subscription_kb import get_cabinet_keyboard, get_device_keybo
 from bot.states.payment_states import DeviceStates, EmailStates
 from bot.utils.api_client import APIClient
 from bot.utils.formatters import format_subscription_info, format_devices_list, get_fallback_texts
-from bot.utils.media import resolve_media as _resolve_media
+from bot.utils.media import resolve_media as _resolve_media, get_section_media
 
 
 logger = logging.getLogger(__name__)
@@ -73,13 +73,8 @@ async def cabinet_handler(callback: CallbackQuery, state: FSMContext) -> None:
                 cabinet_header = texts.get("cabinet_header")
             except Exception:
                 pass
-            try:
-                settings = await client.get_bot_settings()
-                raw_img = settings.get("cabinet_image") or settings.get("cabinet_photo") or ""
-                # Читаем файл с диска если это локальный путь
-                cabinet_image = _resolve_media(raw_img) if raw_img else None
-            except Exception:
-                pass
+            # Берём медиа: сначала из settings, потом из image_url кнопки "cabinet"
+            cabinet_image = await get_section_media(client, "cabinet_image", "cabinet")
 
             # Формируем текст кабинета по ТЗ
             first_name = user_info.get('first_name') or callback.from_user.first_name or '.'

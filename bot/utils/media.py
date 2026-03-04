@@ -16,6 +16,32 @@ _BOT_DIR = os.path.dirname(_THIS_DIR)                           # .../bot
 _ROOT_DIR = os.path.dirname(_BOT_DIR)                           # .../vpnbot
 
 
+async def get_section_media(client, settings_key: str, callback_data: str):
+    """Получить медиа для раздела: сначала из settings, потом из image_url кнопки.
+    
+    Args:
+        client: APIClient
+        settings_key: ключ в bot_settings (например 'cabinet_image')
+        callback_data: callback_data кнопки (например 'cabinet')
+    Returns:
+        resolved media (URL str или BufferedInputFile) или None
+    """
+    raw = None
+    try:
+        settings = await client.get_bot_settings()
+        raw = (settings or {}).get(settings_key) or ""
+    except Exception:
+        pass
+
+    if not raw:
+        try:
+            raw = await client.get_button_image_url(callback_data) or ""
+        except Exception:
+            pass
+
+    return resolve_media(raw) if raw else None
+
+
 def resolve_media(path_or_url: str):
     """Разрешить путь к медиафайлу.
 

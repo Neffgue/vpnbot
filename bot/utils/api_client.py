@@ -1,4 +1,4 @@
-"""Async HTTP client for backend API communication"""
+﻿"""Async HTTP client for backend API communication"""
 
 import httpx
 from typing import Optional, Any, Dict
@@ -352,3 +352,4 @@ class APIClient:
     async def update_instruction_step(self, device: str, step_num: int, data: dict) -> Dict[str, Any]:
         """Обновить шаг инструкции (изображение и т.д.)."""
         return await self.patch(f"/admin/instructions/{device}/steps/{step_num}", json=data)
+
