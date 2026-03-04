@@ -48,7 +48,7 @@ def upgrade() -> None:
         op.add_column('plan_prices', sa.Column('description', sa.Text(), nullable=True))
 
     if not _column_exists('plan_prices', 'is_active'):
-        op.add_column('plan_prices', sa.Column('is_active', sa.Boolean(), nullable=True, server_default='1'))
+        op.add_column('plan_prices', sa.Column('is_active', sa.Boolean(), nullable=True, server_default=sa.text('true')))
 
     if not _column_exists('plan_prices', 'updated_at'):
         op.add_column('plan_prices', sa.Column(

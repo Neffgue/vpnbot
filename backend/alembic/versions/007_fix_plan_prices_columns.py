@@ -49,7 +49,7 @@ def upgrade() -> None:
         op.add_column('plan_prices', sa.Column('description', sa.Text(), nullable=True))
 
     if not _column_exists('plan_prices', 'is_active'):
-        op.add_column('plan_prices', sa.Column('is_active', sa.Boolean(), nullable=True, server_default='1'))
+        op.add_column('plan_prices', sa.Column('is_active', sa.Boolean(), nullable=True, server_default=sa.text('true')))
 
     if not _column_exists('plan_prices', 'updated_at'):
         op.add_column('plan_prices', sa.Column(
@@ -60,7 +60,11 @@ def upgrade() -> None:
         ))
 
     # Set default values for existing rows where columns are NULL
-    conn.execute(text("UPDATE plan_prices SET is_active = 1 WHERE is_active IS NULL"))
+    dialect = conn.dialect.name
+    if dialect == 'sqlite':
+        conn.execute(text("UPDATE plan_prices SET is_active = 1 WHERE is_active IS NULL"))
+    else:
+        conn.execute(text("UPDATE plan_prices SET is_active = true WHERE is_active IS NULL"))
     conn.execute(text("UPDATE plan_prices SET device_limit = 1 WHERE device_limit IS NULL"))
 
 
