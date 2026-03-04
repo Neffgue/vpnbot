@@ -17,10 +17,11 @@ export default function PlanPrices() {
   const [toast, setToast] = useState(null)
 
   // Загружаем список планов из бэкенда (GET /admin/plans → [{id, plan_name, period_days, price_rub}])
-  const { data: rawPlans = [], isLoading } = useQuery({
+  const { data: rawPlans = [], isLoading, refetch } = useQuery({
     queryKey: ['plan-prices'],
     queryFn: () => api.get('/admin/plans').then(r => Array.isArray(r.data) ? r.data : []),
-    staleTime: 10000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   })
 
   // Локальное состояние для редактирования
@@ -72,7 +73,18 @@ export default function PlanPrices() {
       qc.invalidateQueries({ queryKey: ['plan-prices'] })
       setToast({ type: 'success', message: 'Цена сохранена!' })
     },
-    onError: () => setToast({ type: 'error', message: 'Ошибка сохранения' }),
+    onError: (err) => {
+      const status = err?.response?.status
+      const msg = err?.response?.data?.detail || 'Ошибка сохранения'
+      if (status === 404) {
+        // ID устарел — обновляем список и сбрасываем dirty флаги
+        refetch()
+        setRows(r => r.map(row => ({ ...row, _dirty: false })))
+        setToast({ type: 'error', message: 'Тариф не найден в БД. Список обновлён — попробуйте снова.' })
+      } else {
+        setToast({ type: 'error', message: `Ошибка ${status || ''}: ${msg}` })
+      }
+    },
   })
 
   const saveAllMutation = useMutation({
@@ -97,7 +109,17 @@ export default function PlanPrices() {
       setToast({ type: 'success', message: 'Все цены сохранены!' })
       setRows(r => r.map(row => ({ ...row, _dirty: false })))
     },
-    onError: () => setToast({ type: 'error', message: 'Ошибка сохранения' }),
+    onError: (err) => {
+      const status = err?.response?.status
+      const msg = err?.response?.data?.detail || 'Ошибка сохранения'
+      if (status === 404) {
+        refetch()
+        setRows(r => r.map(row => ({ ...row, _dirty: false })))
+        setToast({ type: 'error', message: 'Некоторые тарифы не найдены в БД. Список обновлён — попробуйте снова.' })
+      } else {
+        setToast({ type: 'error', message: `Ошибка ${status || ''}: ${msg}` })
+      }
+    },
   })
 
   const deleteMutation = useMutation({

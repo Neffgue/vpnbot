@@ -266,18 +266,7 @@ async def update_admin_plan(
         )
         plan = result.scalars().first()
         if not plan:
-            # Создаём новый если не найден
-            import uuid as _uuid
-            plan = PlanPrice(
-                id=str(_uuid.uuid4()),
-                plan_name=data.get("plan_name", plan_id),
-                period_days=int(data.get("period_days", 30)),
-                price_rub=float(data.get("price_rub", 299)),
-            )
-            db.add(plan)
-            await db.commit()
-            await db.refresh(plan)
-            return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
+            raise HTTPException(status_code=404, detail=f"Plan '{plan_id}' not found")
         if "plan_name" in data:
             plan.plan_name = str(data["plan_name"])
         if "name" in data:
