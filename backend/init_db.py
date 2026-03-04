@@ -9,16 +9,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Дефолтные тарифы (соответствуют PLAN_PRICES в bot/handlers/payment.py)
 DEFAULT_PLANS = [
-    {"plan_name": "Solo", "period_days": 7,   "price_rub": 90},
-    {"plan_name": "Solo", "period_days": 30,  "price_rub": 150},
-    {"plan_name": "Solo", "period_days": 90,  "price_rub": 400},
-    {"plan_name": "Solo", "period_days": 180, "price_rub": 760},
-    {"plan_name": "Solo", "period_days": 365, "price_rub": 1450},
-    {"plan_name": "Family", "period_days": 7,   "price_rub": 150},
-    {"plan_name": "Family", "period_days": 30,  "price_rub": 250},
-    {"plan_name": "Family", "period_days": 90,  "price_rub": 650},
-    {"plan_name": "Family", "period_days": 180, "price_rub": 1200},
-    {"plan_name": "Family", "period_days": 365, "price_rub": 2300},
+    {"plan_name": "Solo", "period_days": 7,   "price_rub": 90,   "device_limit": 1},
+    {"plan_name": "Solo", "period_days": 30,  "price_rub": 150,  "device_limit": 1},
+    {"plan_name": "Solo", "period_days": 90,  "price_rub": 400,  "device_limit": 1},
+    {"plan_name": "Solo", "period_days": 180, "price_rub": 760,  "device_limit": 1},
+    {"plan_name": "Solo", "period_days": 365, "price_rub": 1450, "device_limit": 1},
+    {"plan_name": "Family", "period_days": 7,   "price_rub": 150,  "device_limit": 3},
+    {"plan_name": "Family", "period_days": 30,  "price_rub": 250,  "device_limit": 3},
+    {"plan_name": "Family", "period_days": 90,  "price_rub": 650,  "device_limit": 3},
+    {"plan_name": "Family", "period_days": 180, "price_rub": 1200, "device_limit": 3},
+    {"plan_name": "Family", "period_days": 365, "price_rub": 2300, "device_limit": 3},
 ]
 
 # Дефолтные тексты бота
@@ -85,6 +85,8 @@ async def seed_default_data():
                     plan_name=plan["plan_name"],
                     period_days=plan["period_days"],
                     price_rub=plan["price_rub"],
+                    device_limit=plan.get("device_limit", 1),
+                    is_active=True,
                 ))
                 added_plans += 1
 
