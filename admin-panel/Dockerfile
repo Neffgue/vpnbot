@@ -3,8 +3,8 @@
 # Then run: docker compose up -d --build
 FROM nginx:1.25-alpine
 
-# Copy pre-built dist folder (must exist before docker build)
-COPY dist/ /usr/share/nginx/html/
+# Copy pre-built dist folder to /admin/ path (vite base: '/admin/')
+COPY dist/ /usr/share/nginx/html/admin/
 
 # Remove default nginx config — our config is mounted via docker-compose volumes
 RUN rm -f /etc/nginx/conf.d/default.conf
