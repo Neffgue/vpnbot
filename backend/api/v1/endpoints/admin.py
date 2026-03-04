@@ -40,6 +40,7 @@ router = APIRouter()
 
 # Key used to store system-level settings (bot token, admin creds, etc.) in BotText table
 SYSTEM_SETTINGS_KEY = "system_settings_json"
+SETTINGS_KEY = "bot_settings_json"
 
 
 # ── Redis cache invalidation helper ─────────────────────────────────────────
@@ -539,8 +540,6 @@ async def delete_bot_button(
 # ═══════════════════════════════════════════════════════════════
 # BOT SETTINGS (настройки — поддержка, канал, медиа, реферал...)
 # ═══════════════════════════════════════════════════════════════
-
-SETTINGS_KEY = "bot_settings_json"
 
 @router.get("/settings")
 async def get_bot_settings(
@@ -1774,16 +1773,7 @@ async def get_stats(
 # PATCH alias for bot-buttons (бот использует PATCH)
 # ═══════════════════════════════════════════════════════════════
 
-@router.patch("/bot-buttons/{btn_id}")
-async def patch_bot_button(
-    btn_id: str,
-    data: dict,
-    current_user=Depends(get_admin_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """PATCH alias for PUT /bot-buttons/{btn_id} — used by bot admin."""
-    from backend.api.v1.endpoints.admin import update_bot_button
-    return await update_bot_button(btn_id=btn_id, data=data, current_user=current_user, db=db)
+# PATCH /bot-buttons/{btn_id} — handled above (see patch_bot_button_admin at line ~494)
 
 
 # ═══════════════════════════════════════════════════════════════

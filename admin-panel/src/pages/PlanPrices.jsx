@@ -25,7 +25,7 @@ export default function PlanPrices() {
 
   // Локальное состояние для редактирования
   const [rows, setRows] = useState([])
-  const [newRow, setNewRow] = useState({ plan_name: 'Solo', period_days: 30, price_rub: 299 })
+  const [newRow, setNewRow] = useState({ plan_name: 'Solo', period_days: 30, price_rub: 299, name: '', device_limit: 1 })
   const [showAdd, setShowAdd] = useState(false)
 
   useEffect(() => {
@@ -35,6 +35,10 @@ export default function PlanPrices() {
         plan_name: p.plan_name,
         period_days: p.period_days,
         price_rub: parseFloat(p.price_rub),
+        name: p.name || '',
+        device_limit: p.device_limit || 1,
+        description: p.description || '',
+        is_active: p.is_active !== false,
         _dirty: false,
       })))
     }
@@ -47,12 +51,20 @@ export default function PlanPrices() {
           plan_name: row.plan_name,
           period_days: row.period_days,
           price_rub: row.price_rub,
+          name: row.name || null,
+          device_limit: row.device_limit || 1,
+          description: row.description || null,
+          is_active: row.is_active !== false,
         })
       } else {
         return api.post('/admin/plans', {
           plan_name: row.plan_name,
           period_days: row.period_days,
           price_rub: row.price_rub,
+          name: row.name || null,
+          device_limit: row.device_limit || 1,
+          description: row.description || null,
+          is_active: row.is_active !== false,
         })
       }
     },
@@ -72,6 +84,10 @@ export default function PlanPrices() {
             plan_name: row.plan_name,
             period_days: row.period_days,
             price_rub: row.price_rub,
+            name: row.name || null,
+            device_limit: row.device_limit || 1,
+            description: row.description || null,
+            is_active: row.is_active !== false,
           })
         }
       }
@@ -93,7 +109,11 @@ export default function PlanPrices() {
   })
 
   const addMutation = useMutation({
-    mutationFn: () => api.post('/admin/plans', newRow),
+    mutationFn: () => api.post('/admin/plans', {
+      ...newRow,
+      name: newRow.name || null,
+      device_limit: newRow.device_limit || 1,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['plan-prices'] })
       setToast({ type: 'success', message: 'Цена добавлена!' })

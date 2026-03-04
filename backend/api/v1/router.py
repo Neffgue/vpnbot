@@ -194,19 +194,57 @@ async def create_admin_plan(
     from backend.models.config import PlanPrice
     import uuid as _uuid
     try:
-        plan = PlanPrice(
-            id=str(_uuid.uuid4()),
-            plan_name=data.get("plan_name", "Solo"),
-            period_days=int(data.get("period_days", 30)),
-            price_rub=float(data.get("price_rub", 299)),
-        )
-        db.add(plan)
-        await db.commit()
-        await db.refresh(plan)
-        return {"id": str(plan.id), "plan_name": plan.plan_name, "period_days": plan.period_days, "price_rub": float(plan.price_rub)}
+        # Проверяем существование плана с такими же plan_name + period_days
+        from sqlalchemy import select as _sel
+        existing = (await db.execute(
+            _sel(PlanPrice).where(
+                (PlanPrice.plan_name == data.get("plan_name", "Solo")) &
+                (PlanPrice.period_days == int(data.get("period_days", 30)))
+            )
+        )).scalars().first()
+        if existing:
+            # Обновляем существующий
+            if "price_rub" in data:
+                existing.price_rub = float(data["price_rub"])
+            if "name" in data and data["name"]:
+                existing.name = str(data["name"])
+            if "device_limit" in data:
+                existing.device_limit = int(data["device_limit"])
+            if "description" in data:
+                existing.description = str(data["description"]) if data["description"] else None
+            if "is_active" in data:
+                existing.is_active = bool(data["is_active"])
+            await db.commit()
+            await db.refresh(existing)
+            plan = existing
+        else:
+            plan = PlanPrice(
+                id=str(_uuid.uuid4()),
+                plan_name=data.get("plan_name", "Solo"),
+                period_days=int(data.get("period_days", 30)),
+                price_rub=float(data.get("price_rub", 299)),
+                name=data.get("name") or None,
+                device_limit=int(data.get("device_limit", 1)),
+                description=data.get("description") or None,
+                is_active=bool(data.get("is_active", True)),
+            )
+            db.add(plan)
+            await db.commit()
+            await db.refresh(plan)
+        await _invalidate_plans_cache()
+        return {
+            "id": str(plan.id),
+            "plan_name": plan.plan_name,
+            "name": plan.name or plan.plan_name,
+            "period_days": plan.period_days,
+            "price_rub": float(plan.price_rub),
+            "device_limit": int(plan.device_limit or 1),
+            "description": plan.description or "",
+            "is_active": bool(plan.is_active),
+        }
     except Exception as e:
         await db.rollback()
-        logger.error(f"create_admin_plan error: {e}")
+        logger.error(f"create_admin_plan error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
