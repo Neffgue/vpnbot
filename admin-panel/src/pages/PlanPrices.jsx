@@ -26,7 +26,7 @@ export default function PlanPrices() {
 
   // Локальное состояние для редактирования
   const [rows, setRows] = useState([])
-  const [newRow, setNewRow] = useState({ plan_name: 'Solo', period_days: 30, price_rub: 299, name: '', device_limit: 1 })
+  const [newRow, setNewRow] = useState({ plan_name: 'Solo', period_days: 30, price_rub: 299, name: '', device_limit: 1, description: '', is_active: true })
   const [showAdd, setShowAdd] = useState(false)
 
   useEffect(() => {
@@ -150,7 +150,7 @@ export default function PlanPrices() {
       qc.invalidateQueries({ queryKey: ['plan-prices'] })
       setToast({ type: 'success', message: 'Цена добавлена!' })
       setShowAdd(false)
-      setNewRow({ plan_name: 'solo', period_days: 30, price_rub: 299, name: '', device_limit: 1, description: '', is_active: true })
+      setNewRow({ plan_name: 'Solo', period_days: 30, price_rub: 299, name: '', device_limit: 1, description: '', is_active: true })
     },
     onError: () => setToast({ type: 'error', message: 'Ошибка добавления' }),
   })
@@ -322,8 +322,8 @@ export default function PlanPrices() {
                 onChange={e => setNewRow(r => ({ ...r, plan_name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="solo">Solo</option>
-                <option value="family">Family</option>
+                <option value="Solo">Solo</option>
+                <option value="Family">Family</option>
                 <option value="custom">Другой...</option>
               </select>
               {newRow.plan_name === 'custom' && (

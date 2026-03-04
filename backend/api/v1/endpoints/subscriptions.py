@@ -44,47 +44,11 @@ async def get_subscription_plans(db: AsyncSession = Depends(get_db)):
 
         plans = list(plan_map.values())
 
-        # If no plans configured yet, return defaults (mock mode)
-        if not plans:
-            plans = [
-                {
-                    "id": "Solo",
-                    "name": "Solo",
-                    "description": "1 устройство, 100 ГБ трафика",
-                    "price": 299.0,
-                    "periods": [
-                        {"days": 7, "price": 99.0},
-                        {"days": 30, "price": 299.0},
-                        {"days": 90, "price": 799.0},
-                        {"days": 180, "price": 1499.0},
-                        {"days": 365, "price": 2699.0},
-                    ],
-                },
-                {
-                    "id": "Family",
-                    "name": "Family",
-                    "description": "5 устройств, 500 ГБ трафика",
-                    "price": 499.0,
-                    "periods": [
-                        {"days": 7, "price": 149.0},
-                        {"days": 30, "price": 499.0},
-                        {"days": 90, "price": 1299.0},
-                        {"days": 180, "price": 2499.0},
-                        {"days": 365, "price": 4499.0},
-                    ],
-                },
-            ]
-
+        # Если планы не настроены — возвращаем пустой список (без захардкоженных дефолтов)
         return {"plans": plans}
     except Exception as e:
-        logger.error(f"Error getting subscription plans: {e}")
-        # Return defaults on error
-        return {
-            "plans": [
-                {"id": "Solo", "name": "Solo", "price": 299.0, "periods": []},
-                {"id": "Family", "name": "Family", "price": 499.0, "periods": []},
-            ]
-        }
+        logger.error(f"Error getting subscription plans: {e}", exc_info=True)
+        return {"plans": []}
 
 
 @router.get("", response_model=list[SubscriptionResponse])

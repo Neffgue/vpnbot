@@ -194,12 +194,17 @@ async def create_admin_plan(
     from backend.models.config import PlanPrice
     import uuid as _uuid
     try:
-        # Проверяем существование плана с такими же plan_name + period_days
-        from sqlalchemy import select as _sel
+        # Нормализуем plan_name: Solo/Family (capitalize первой буквы, остальное lower)
+        raw_name = str(data.get("plan_name", "Solo")).strip()
+        normalized_name = raw_name[0].upper() + raw_name[1:].lower() if raw_name else "Solo"
+        period = int(data.get("period_days", 30))
+
+        # Проверяем существование плана с такими же plan_name + period_days (case-insensitive)
+        from sqlalchemy import select as _sel, func as _func
         existing = (await db.execute(
             _sel(PlanPrice).where(
-                (PlanPrice.plan_name == data.get("plan_name", "Solo")) &
-                (PlanPrice.period_days == int(data.get("period_days", 30)))
+                (_func.lower(PlanPrice.plan_name) == normalized_name.lower()) &
+                (PlanPrice.period_days == period)
             )
         )).scalars().first()
         if existing:
@@ -220,8 +225,8 @@ async def create_admin_plan(
         else:
             plan = PlanPrice(
                 id=str(_uuid.uuid4()),
-                plan_name=data.get("plan_name", "Solo"),
-                period_days=int(data.get("period_days", 30)),
+                plan_name=normalized_name,
+                period_days=period,
                 price_rub=float(data.get("price_rub", 299)),
                 name=data.get("name") or None,
                 device_limit=int(data.get("device_limit", 1)),
@@ -255,22 +260,26 @@ async def update_admin_plan(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Alias: PUT /admin/plans/{id} — update plan price. Accepts UUID or plan_name."""
+    """Alias: PUT /admin/plans/{id} — update plan price. Accepts UUID or plan_name (case-insensitive)."""
     from backend.models.config import PlanPrice
-    from sqlalchemy import select, or_
+    from sqlalchemy import select, or_, func as _func
     try:
         result = await db.execute(
             select(PlanPrice).where(
-                or_(PlanPrice.id == plan_id, PlanPrice.plan_name == plan_id)
+                or_(
+                    PlanPrice.id == plan_id,
+                    _func.lower(PlanPrice.plan_name) == str(plan_id).lower(),
+                )
             )
         )
         plan = result.scalars().first()
         if not plan:
             raise HTTPException(status_code=404, detail=f"Plan '{plan_id}' not found")
         if "plan_name" in data:
-            plan.plan_name = str(data["plan_name"])
+            raw_name = str(data["plan_name"] or "").strip()
+            plan.plan_name = raw_name[0].upper() + raw_name[1:].lower() if raw_name else plan.plan_name
         if "name" in data:
-            plan.name = str(data["name"])
+            plan.name = str(data["name"]) if data["name"] else None
         if "period_days" in data:
             plan.period_days = int(data["period_days"])
         if "price_rub" in data:
@@ -354,13 +363,16 @@ async def delete_admin_plan(
     current_user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Alias: DELETE /admin/plans/{id} — delete plan price entry."""
+    """Alias: DELETE /admin/plans/{id} — delete plan price entry (UUID or plan_name, case-insensitive)."""
     from backend.models.config import PlanPrice
-    from sqlalchemy import select, or_
+    from sqlalchemy import select, or_, func as _func
     try:
         result = await db.execute(
             select(PlanPrice).where(
-                or_(PlanPrice.id == plan_id, PlanPrice.plan_name == plan_id)
+                or_(
+                    PlanPrice.id == plan_id,
+                    _func.lower(PlanPrice.plan_name) == str(plan_id).lower(),
+                )
             )
         )
         plan = result.scalars().first()
