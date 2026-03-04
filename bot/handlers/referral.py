@@ -10,6 +10,7 @@ from bot.config import config
 from bot.keyboards.main_menu import get_main_menu
 from bot.keyboards.inline_kb import get_back_button
 from bot.utils.api_client import APIClient
+from bot.utils.media import resolve_media as _resolve_media
 
 logger = logging.getLogger(__name__)
 
@@ -20,33 +21,6 @@ BOT_USERNAME = (
     or os.getenv("TELEGRAM_BOT_USERNAME")
     or "vpnsolid_bot"
 )
-
-
-def _resolve_media(path_or_url: str):
-    """Reads media from disk or returns URL string."""
-    if not path_or_url:
-        return None
-    if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
-        return path_or_url
-    _project_root = "/home/neffgue313/vpnbot"
-    candidates = [
-        path_or_url,
-        os.path.join(_project_root, path_or_url.lstrip("/")),
-        os.path.join(_project_root, "static", "uploads", os.path.basename(path_or_url)),
-        "/app" + path_or_url,
-        os.path.join("/app", path_or_url.lstrip("/")),
-    ]
-    from aiogram.types import BufferedInputFile
-    for candidate in candidates:
-        try:
-            if os.path.isfile(candidate):
-                with open(candidate, "rb") as f:
-                    data = f.read()
-                return BufferedInputFile(data, filename=os.path.basename(candidate))
-        except Exception:
-            continue
-    logger.warning(f"Media file not found: {path_or_url}")
-    return None
 
 
 # ─── 🎁 ПОЛУЧИТЬ БЕСПЛАТНО (реферальная программа с бонусными днями) ─────────

@@ -5,42 +5,16 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-import os
-
 from bot.config import config
 from bot.keyboards.main_menu import get_main_menu
 from bot.keyboards.subscription_kb import get_cabinet_keyboard, get_device_keyboard, get_add_device_keyboard
 from bot.states.payment_states import DeviceStates, EmailStates
 from bot.utils.api_client import APIClient
 from bot.utils.formatters import format_subscription_info, format_devices_list, get_fallback_texts
+from bot.utils.media import resolve_media as _resolve_media
 
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_media(path_or_url: str):
-    """Читает медиа-файл с диска или возвращает URL как есть."""
-    if not path_or_url:
-        return None
-    if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
-        return path_or_url
-    _project_root = "/home/neffgue313/vpnbot"
-    candidates = [
-        path_or_url,
-        os.path.join(_project_root, path_or_url.lstrip("/")),
-        os.path.join(_project_root, "static", "uploads", os.path.basename(path_or_url)),
-        "/app" + path_or_url,
-        os.path.join("/app", path_or_url.lstrip("/")),
-    ]
-    for candidate in candidates:
-        try:
-            if os.path.isfile(candidate):
-                with open(candidate, "rb") as f:
-                    return f.read()
-        except Exception:
-            continue
-    logger.warning(f"Media file not found: {path_or_url}")
-    return None
 
 router = Router()
 

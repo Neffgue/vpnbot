@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, RefreshCw, X, Image } from 'lucide-react'
 import api from '../api/client'
@@ -49,11 +49,9 @@ export default function BotSettings() {
   if (isLoading) return <div className="text-center py-10 text-gray-400">Загрузка...</div>
 
   const tabs = [
-    { id: 'general', label: '⚙️ Основные' },
+    { id: 'general', label: 'Основные' },
     { id: 'media', label: '🖼️ Медиа' },
-    { id: 'plans', label: '💸 Тарифы' },
-    { id: 'referral', label: '👥 Партнёрка' },
-    { id: 'notifications', label: '🔔 Уведомления' },
+        { id: 'notifications', label: '🔔 Уведомления' },
   ]
 
   return (
@@ -81,12 +79,6 @@ export default function BotSettings() {
         )}
         {activeTab === 'media' && (
           <MediaTab current={current} set={set} />
-        )}
-        {activeTab === 'plans' && (
-          <PlansTab current={current} set={set} />
-        )}
-        {activeTab === 'referral' && (
-          <ReferralTab current={current} set={set} />
         )}
         {activeTab === 'notifications' && (
           <NotificationsTab current={current} set={set} />
@@ -355,3 +347,5 @@ function NotificationsTab({ current, set }) {
     </div>
   )
 }
+
+
