@@ -126,7 +126,18 @@ export default function PlanPrices() {
     mutationFn: (id) => api.delete(`/admin/plans/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['plan-prices'] })
-      setToast({ type: 'success', message: 'Цена удалена' })
+      setToast({ type: 'success', message: 'Тариф удалён' })
+    },
+    onError: (err) => {
+      const status = err?.response?.status
+      if (status === 404) {
+        // Запись уже удалена или список устарел
+        qc.invalidateQueries({ queryKey: ['plan-prices'] })
+        setToast({ type: 'error', message: 'Тариф уже удалён или не найден. Список обновлён.' })
+      } else {
+        const msg = err?.response?.data?.detail || 'Ошибка удаления'
+        setToast({ type: 'error', message: `Ошибка ${status || ''}: ${msg}` })
+      }
     },
   })
 
@@ -140,7 +151,7 @@ export default function PlanPrices() {
       qc.invalidateQueries({ queryKey: ['plan-prices'] })
       setToast({ type: 'success', message: 'Цена добавлена!' })
       setShowAdd(false)
-      setNewRow({ plan_name: 'Solo', period_days: 30, price_rub: 299 })
+      setNewRow({ plan_name: 'solo', period_days: 30, price_rub: 299, name: '', device_limit: 1, description: '', is_active: true })
     },
     onError: () => setToast({ type: 'error', message: 'Ошибка добавления' }),
   })
@@ -206,9 +217,12 @@ export default function PlanPrices() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Период</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Цена (₽)</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действия</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Период</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Название</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Цена (₽)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Устройств</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Активен</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действия</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -216,11 +230,20 @@ export default function PlanPrices() {
                     const idx = rows.findIndex(r => r === row)
                     return (
                       <tr key={row.id || `${row.plan_name}-${row.period_days}`} className={row._dirty ? 'bg-yellow-50' : 'hover:bg-gray-50'}>
-                        <td className="px-6 py-3 text-sm text-gray-700">
+                        <td className="px-4 py-3 text-sm text-gray-700 font-medium whitespace-nowrap">
                           {PERIOD_LABELS[row.period_days] || `${row.period_days} дней`}
                         </td>
-                        <td className="px-6 py-3">
-                          <div className="flex items-center gap-2">
+                        <td className="px-4 py-3">
+                          <input
+                            type="text"
+                            placeholder="Отображаемое имя"
+                            value={row.name || ''}
+                            onChange={e => updateRow(idx, 'name', e.target.value)}
+                            className="w-36 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
                             <span className="text-gray-400 text-sm">₽</span>
                             <input
                               type="number"
@@ -228,11 +251,31 @@ export default function PlanPrices() {
                               step="1"
                               value={row.price_rub}
                               onChange={e => updateRow(idx, 'price_rub', parseFloat(e.target.value) || 0)}
-                              className="w-28 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
                         </td>
-                        <td className="px-6 py-3 text-right">
+                        <td className="px-4 py-3">
+                          <input
+                            type="number"
+                            min="1"
+                            max="10"
+                            step="1"
+                            title="Лимит устройств"
+                            value={row.device_limit || 1}
+                            onChange={e => updateRow(idx, 'device_limit', parseInt(e.target.value) || 1)}
+                            className="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={row.is_active !== false}
+                            onChange={e => updateRow(idx, 'is_active', e.target.checked)}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {row._dirty && (
                               <button
@@ -245,8 +288,13 @@ export default function PlanPrices() {
                             )}
                             {row.id && (
                               <button
-                                onClick={() => deleteMutation.mutate(row.id)}
+                                onClick={() => {
+                                  if (window.confirm(`Удалить тариф "${PERIOD_LABELS[row.period_days] || row.period_days + ' дней'}"?`)) {
+                                    deleteMutation.mutate(row.id)
+                                  }
+                                }}
                                 className="p-1.5 text-red-400 hover:bg-red-50 rounded"
+                                title="Удалить"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -267,25 +315,35 @@ export default function PlanPrices() {
       {showAdd && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <h3 className="font-semibold text-gray-800 mb-4">Добавить цену</h3>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Тариф</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Тариф (ключ)</label>
               <select
                 value={newRow.plan_name}
                 onChange={e => setNewRow(r => ({ ...r, plan_name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option>Solo</option>
-                <option>Family</option>
+                <option value="solo">Solo</option>
+                <option value="family">Family</option>
                 <option value="custom">Другой...</option>
               </select>
               {newRow.plan_name === 'custom' && (
                 <input
                   className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Название тарифа"
+                  placeholder="Ключ тарифа (solo, vip...)"
                   onChange={e => setNewRow(r => ({ ...r, plan_name: e.target.value }))}
                 />
               )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Название (отображаемое)</label>
+              <input
+                type="text"
+                placeholder="Соло (1 устр.)"
+                value={newRow.name || ''}
+                onChange={e => setNewRow(r => ({ ...r, name: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Период (дней)</label>
@@ -308,6 +366,27 @@ export default function PlanPrices() {
                 min="0"
                 value={newRow.price_rub}
                 onChange={e => setNewRow(r => ({ ...r, price_rub: parseFloat(e.target.value) || 0 }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Лимит устройств</label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={newRow.device_limit || 1}
+                onChange={e => setNewRow(r => ({ ...r, device_limit: parseInt(e.target.value) || 1 }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
+              <input
+                type="text"
+                placeholder="Для одного устройства"
+                value={newRow.description || ''}
+                onChange={e => setNewRow(r => ({ ...r, description: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
