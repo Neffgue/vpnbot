@@ -10,7 +10,7 @@ import os
 logger = logging.getLogger(__name__)
 
 # Корневая директория проекта — определяется автоматически
-# Работает как в Docker (/app) так и на alwaysdata (/home/neffgue313/vpnbot)
+# Universal media resolver for Docker and local environments
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))          # .../bot/utils
 _BOT_DIR = os.path.dirname(_THIS_DIR)                           # .../bot
 _ROOT_DIR = os.path.dirname(_BOT_DIR)                           # .../vpnbot

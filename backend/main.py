@@ -95,7 +95,7 @@ app.add_middleware(
 )
 
 # Определяем корень проекта — папка vpnbot
-# При запуске через uWSGI __file__ = /home/neffgue313/vpnbot/backend/main.py
+# When running via uWSGI or Docker, __file__ resolves to /app/backend/main.py
 # поэтому идём на 2 уровня вверх: backend → vpnbot
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))  # .../vpnbot/backend
 _ROOT_DIR = os.path.dirname(_BACKEND_DIR)                  # .../vpnbot
@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
 # WSGI-обёртка для AlwaysData (uWSGI не поддерживает ASGI напрямую)
 # В панели AlwaysData (Web → Sites) указывай: backend.main:wsgi_app
-# Working directory: /home/neffgue313/vpnbot
+# Working directory: /app (Docker) or project root
 try:
     from a2wsgi import ASGIMiddleware
     wsgi_app = ASGIMiddleware(app)

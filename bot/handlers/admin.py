@@ -15,7 +15,7 @@ from bot.keyboards.admin_kb import get_admin_menu, get_admin_confirm_keyboard, g
 from bot.states.admin_states import AdminStates
 from bot.utils.api_client import APIClient
 
-UPLOAD_DIR = "/home/neffgue313/vpnbot/static/uploads"
+UPLOAD_DIR = "/app/static/uploads"
 
 logger = logging.getLogger(__name__)
 
