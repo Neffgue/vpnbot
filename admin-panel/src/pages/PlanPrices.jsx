@@ -142,17 +142,24 @@ export default function PlanPrices() {
 
   const addMutation = useMutation({
     mutationFn: () => api.post('/admin/plans', {
-      ...newRow,
+      plan_name: newRow.plan_name,
+      period_days: parseInt(newRow.period_days, 10),
+      price_rub: parseFloat(newRow.price_rub) || 0,
       name: newRow.name || null,
-      device_limit: newRow.device_limit || 1,
+      device_limit: parseInt(newRow.device_limit, 10) || 1,
+      description: newRow.description || null,
+      is_active: newRow.is_active !== false,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['plan-prices'] })
-      setToast({ type: 'success', message: 'Цена добавлена!' })
+      setToast({ type: 'success', message: 'Тариф успешно добавлен!' })
       setShowAdd(false)
       setNewRow({ plan_name: 'Solo', period_days: 30, price_rub: 299, name: '', device_limit: 1, description: '', is_active: true })
     },
-    onError: () => setToast({ type: 'error', message: 'Ошибка добавления' }),
+    onError: (err) => {
+      const msg = err?.response?.data?.detail || 'Ошибка добавления тарифа'
+      setToast({ type: 'error', message: msg })
+    },
   })
 
   function updateRow(idx, field, val) {

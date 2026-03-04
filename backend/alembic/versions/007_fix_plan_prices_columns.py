@@ -1,15 +1,15 @@
-"""add name, device_limit, image_url, description, is_active, updated_at to plan_prices
+"""fix plan_prices columns - ensure name, device_limit, image_url, description, is_active exist
 
-Revision ID: 006
-Revises: 005
-Create Date: 2026-03-03
+Revision ID: 007
+Revises: 006
+Create Date: 2026-03-04
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
 
-revision = '006'
-down_revision = '005'
+revision = '007'
+down_revision = '006'
 branch_labels = None
 depends_on = None
 
@@ -24,7 +24,6 @@ def _column_exists(table: str, column: str) -> bool:
             rows = result.fetchall()
             return any(row[1] == column for row in rows)
         else:
-            # PostgreSQL
             result = conn.execute(text(
                 "SELECT 1 FROM information_schema.columns "
                 "WHERE table_name=:t AND column_name=:c"
@@ -35,6 +34,8 @@ def _column_exists(table: str, column: str) -> bool:
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+
     if not _column_exists('plan_prices', 'name'):
         op.add_column('plan_prices', sa.Column('name', sa.String(100), nullable=True))
 
@@ -58,8 +59,10 @@ def upgrade() -> None:
             nullable=True,
         ))
 
+    # Set default values for existing rows where columns are NULL
+    conn.execute(text("UPDATE plan_prices SET is_active = 1 WHERE is_active IS NULL"))
+    conn.execute(text("UPDATE plan_prices SET device_limit = 1 WHERE device_limit IS NULL"))
+
 
 def downgrade() -> None:
-    for col in ('updated_at', 'is_active', 'description', 'image_url', 'device_limit', 'name'):
-        if _column_exists('plan_prices', col):
-            op.drop_column('plan_prices', col)
+    pass

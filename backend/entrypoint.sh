@@ -22,8 +22,10 @@ asyncio.run(check())
 done
 echo "  PostgreSQL is ready!"
 
-echo "[2/3] Creating database tables..."
+echo "[2/3] Creating database tables and running migrations..."
 python /app/backend/init_db.py
+cd /app/backend && alembic upgrade head || echo "  Alembic migrations warning (may already be up to date)"
+cd /app
 
 echo "[3/3] Starting Uvicorn..."
 cd /app

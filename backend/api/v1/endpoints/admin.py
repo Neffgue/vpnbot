@@ -1460,8 +1460,17 @@ async def create_plan_price(
 
         if existing:
             existing.price_rub = plan_data.price_rub
+            if plan_data.name is not None:
+                existing.name = plan_data.name
+            if plan_data.device_limit is not None:
+                existing.device_limit = plan_data.device_limit
+            if plan_data.description is not None:
+                existing.description = plan_data.description
+            if plan_data.is_active is not None:
+                existing.is_active = plan_data.is_active
             await db.commit()
             await db.refresh(existing)
+            await _invalidate_bot_cache("bot:plans")
             logger.info(f"Plan price updated: {plan_data.plan_name} {plan_data.period_days}d")
             return existing
 
