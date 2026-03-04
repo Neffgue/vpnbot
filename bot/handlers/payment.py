@@ -36,37 +36,16 @@ PERIOD_LABELS = {
     365: "12 месяцев",
 }
 
-FALLBACK_PLANS = [
-    {
-        "id": "solo",
-        "plan_name": "solo",
-        "name": "Соло (1 устройство)",
-        "devices": 1,
-        "period_days": 30,
-        "price": 150,
-        "is_active": True,
-    },
-    {
-        "id": "family",
-        "plan_name": "family",
-        "name": "Семейный (5 устройств)",
-        "devices": 5,
-        "period_days": 30,
-        "price": 250,
-        "is_active": True,
-    },
-]
-
-
 async def _fetch_plans(api: APIClient) -> list:
-    """Загружает тарифы из API. При ошибке возвращает fallback-варианты."""
+    """Загружает тарифы из API. При ошибке возвращает пустой список."""
     try:
         plans = await api.get_subscription_plans()
         if plans:
-            return [p for p in plans if p.get("is_active", True)]
+            active = [p for p in plans if p.get("is_active", True)]
+            return active
     except Exception as e:
-        logger.warning(f"Failed to fetch plans from API, using fallback: {e}")
-    return FALLBACK_PLANS
+        logger.warning(f"Failed to fetch plans from API: {e}")
+    return []
 
 
 def _group_plans_by_name(plans: list) -> dict:
@@ -131,6 +110,25 @@ async def buy_subscription_handler(callback: CallbackQuery, state: FSMContext) -
 
     async with APIClient(config.api.base_url, config.api.api_key) as api:
         plans = await _fetch_plans(api)
+
+    if not plans:
+        no_plans_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ В меню", callback_data="back_to_menu")]
+        ])
+        try:
+            await callback.message.edit_text(
+                "⚙️ <b>Тарифы ещё не настроены.</b>\n\n"
+                "Пожалуйста, обратитесь к администратору или попробуйте позже.",
+                parse_mode="HTML",
+                reply_markup=no_plans_kb,
+            )
+        except Exception:
+            await callback.message.answer(
+                "⚙️ Тарифы ещё не настроены. Обратитесь к администратору.",
+                parse_mode="HTML",
+                reply_markup=no_plans_kb,
+            )
+        return
 
     grouped = _group_plans_by_name(plans)
 

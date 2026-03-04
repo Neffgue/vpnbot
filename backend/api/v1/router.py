@@ -167,15 +167,15 @@ async def get_admin_plans(
             {
                 "id": str(p.id),
                 "plan_name": p.plan_name,
-                "name": p.name or p.plan_name,
+                "name": getattr(p, "name", None) or p.plan_name,
                 "period_days": int(p.period_days),
                 "price_rub": float(p.price_rub),
                 "price": float(p.price_rub),
-                "device_limit": int(p.device_limit or 1),
-                "devices": int(p.device_limit or 1),
-                "image_url": p.image_url or "",
-                "description": p.description or "",
-                "is_active": bool(p.is_active) if p.is_active is not None else True,
+                "device_limit": int(getattr(p, "device_limit", None) or 1),
+                "devices": int(getattr(p, "device_limit", None) or 1),
+                "image_url": getattr(p, "image_url", None) or "",
+                "description": getattr(p, "description", None) or "",
+                "is_active": bool(getattr(p, "is_active", True)),
             }
             for p in plans
         ]
