@@ -1,4 +1,4 @@
-# Environment variables
+﻿# Environment variables
 .env
 .env.local
 .env.*.local
@@ -59,7 +59,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+# dist/  # commented out - admin-panel/dist is needed for Docker nginx build
 downloads/
 eggs/
 .eggs/
@@ -160,6 +160,9 @@ Dockerfile.celery
 docker-compose.prod.yml
 kk.txt
 
+# НЕ игнорируем dist — он нужен для Docker сборки nginx образа
+# !admin-panel/dist
+
 # Лишние отчёты и временные файлы анализа
 ANALYSIS_*.md
 ANALYSIS_*.txt
@@ -215,3 +218,5 @@ docker-compose.infra.yml
 
 # Rovodev агент
 .rovodev/
+
+!admin-panel/dist/

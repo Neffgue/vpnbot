@@ -1,30 +1,14 @@
-# Build stage
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy source code
-COPY . .
-
-# Build the application
-RUN npm run build
-
-# Production stage
+# Simple nginx stage — frontend is pre-built locally via:
+#   cd admin-panel && npm ci && npm run build
+# Then run: docker compose up -d --build
 FROM nginx:1.25-alpine
 
-# Copy built assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy pre-built dist folder (must exist before docker build)
+COPY dist/ /usr/share/nginx/html/
 
 # Remove default nginx config — our config is mounted via docker-compose volumes
 RUN rm -f /etc/nginx/conf.d/default.conf
 
-# Expose port
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
