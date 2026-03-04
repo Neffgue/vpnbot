@@ -145,29 +145,19 @@ services:
     command: ["celery", "-A", "worker.celery_app", "beat", "--loglevel=info"]
 
   # ── Nginx (reverse proxy + admin panel static) ──────────────
-  # Build admin-panel once (keeps container running; you can stop it after build)
-  admin_builder:
-    image: node:20-alpine
-    container_name: vpn_admin_builder
-    working_dir: /app
-    volumes:
-      - ./admin-panel:/app
-    command: sh -c "npm ci && npm run build && tail -f /dev/null"
-    networks:
-      - vpn_network
-
   nginx:
-    image: nginx:1.25-alpine
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
     container_name: vpn_nginx
     restart: unless-stopped
     depends_on:
-      - backend
-      - admin_builder
+      backend:
+        condition: service_healthy
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - static_uploads:/usr/share/nginx/html/static:ro
-      - ./admin-panel/dist:/usr/share/nginx/html:ro
     ports:
       - "80:80"
     networks:

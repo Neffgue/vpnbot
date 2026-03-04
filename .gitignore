@@ -151,6 +151,15 @@ backups/
 # CI/CD
 .github/workflows/secrets.yml
 
+# Тестовые файлы (удалены из репо после прогона тестов)
+tests/
+backend/tests/
+pytest.ini
+requirements-test.txt
+Dockerfile.celery
+docker-compose.prod.yml
+kk.txt
+
 # Лишние отчёты и временные файлы анализа
 ANALYSIS_*.md
 ANALYSIS_*.txt

@@ -16,13 +16,13 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
-
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+FROM nginx:1.25-alpine
 
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Remove default nginx config — our config is mounted via docker-compose volumes
+RUN rm -f /etc/nginx/conf.d/default.conf
 
 # Expose port
 EXPOSE 80
