@@ -30,19 +30,18 @@ export default function PlanPrices() {
   const [showAdd, setShowAdd] = useState(false)
 
   useEffect(() => {
-    if (rawPlans.length > 0) {
-      setRows(rawPlans.map(p => ({
-        id: p.id,
-        plan_name: p.plan_name,
-        period_days: p.period_days,
-        price_rub: parseFloat(p.price_rub),
-        name: p.name || '',
-        device_limit: p.device_limit || 1,
-        description: p.description || '',
-        is_active: p.is_active !== false,
-        _dirty: false,
-      })))
-    }
+    // Всегда синхронизируем rows с сервером (даже если список пустой — очищаем таблицу)
+    setRows(rawPlans.map(p => ({
+      id: p.id,
+      plan_name: p.plan_name,
+      period_days: p.period_days,
+      price_rub: parseFloat(p.price_rub),
+      name: p.name || '',
+      device_limit: p.device_limit || 1,
+      description: p.description || '',
+      is_active: p.is_active !== false,
+      _dirty: false,
+    })))
   }, [rawPlans])
 
   const saveMutation = useMutation({
