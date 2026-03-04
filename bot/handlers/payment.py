@@ -15,6 +15,7 @@ from bot.keyboards.payment_kb import (
 from bot.states.payment_states import PaymentStates
 from bot.utils.api_client import APIClient
 from bot.utils.formatters import format_payment_confirmation
+from bot.utils.media import resolve_media
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +199,7 @@ async def select_plan(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("period_"), PaymentStates.waiting_period_selection)
 async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
-    """Выбор периода — показываем методы оплаты."""
+    """Выбор периода — показываем подтверждение с ценой из БД."""
     await callback.answer()
 
     period_days = int(callback.data.replace("period_", ""))
@@ -216,10 +217,33 @@ async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
     )
     await state.set_state(PaymentStates.waiting_payment_method)
 
-    payment_text = (
-        "💸 <b>Выберите способ оплаты для продолжения:</b>\n\n"
-        "😁 Советуем оплачивать подписку через <b>СБП</b> — это дешевле и быстрее."
+    payment_text = format_payment_confirmation(
+        plan_name=plan_info.get("name", "VPN"),
+        period_days=period_days,
+        price=price,
+        currency="RUB",
     )
+
+    # Показываем картинку тарифа если есть
+    image_url = plan_info.get("image_url", "")
+    cover = resolve_media(image_url) if image_url else None
+
+    if cover:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        try:
+            await callback.bot.send_photo(
+                chat_id=callback.from_user.id,
+                photo=cover,
+                caption=payment_text,
+                parse_mode="HTML",
+                reply_markup=get_payment_method_keyboard(),
+            )
+            return
+        except Exception as e:
+            logger.error(f"Failed to send period cover photo: {e}")
 
     try:
         await callback.message.edit_text(
@@ -399,9 +423,9 @@ async def back_to_periods(callback: CallbackQuery, state: FSMContext) -> None:
     await back_to_payment(callback, state)
 
 
-@router.callback_query(F.data == "confirm_payment")
+@router.callback_query(F.data == "confirm_payment", PaymentStates.waiting_period_selection)
 async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    """Подтверждение оплаты — переходим к выбору метода."""
+    """Подтверждение оплаты — переходим к выбору метода оплаты."""
     await callback.answer()
 
     data = await state.get_data()
@@ -416,14 +440,38 @@ async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) ->
         currency="RUB",
     )
 
+    # Показываем картинку тарифа если есть
+    image_url = plan_info.get("image_url", "")
+    cover = resolve_media(image_url) if image_url else None
+
+    if cover:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        try:
+            await callback.bot.send_photo(
+                chat_id=callback.from_user.id,
+                photo=cover,
+                caption=confirmation_text,
+                parse_mode="HTML",
+                reply_markup=get_payment_method_keyboard(),
+            )
+            await state.set_state(PaymentStates.waiting_payment_method)
+            return
+        except Exception as e:
+            logger.error(f"Failed to send plan cover photo: {e}")
+
     try:
         await callback.message.edit_text(
             confirmation_text,
+            parse_mode="HTML",
             reply_markup=get_payment_method_keyboard(),
         )
     except Exception:
         await callback.message.answer(
             confirmation_text,
+            parse_mode="HTML",
             reply_markup=get_payment_method_keyboard(),
         )
 
