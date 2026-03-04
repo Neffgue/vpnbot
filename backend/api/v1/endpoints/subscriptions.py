@@ -20,35 +20,36 @@ router = APIRouter()
 async def get_subscription_plans(db: AsyncSession = Depends(get_db)):
     """
     Get all available subscription plans with prices.
-    Returns plans for the bot's payment flow.
+    Returns flat list of plans for the bot's payment flow.
+    Each item represents one plan+period combination.
     """
     try:
-        stmt = select(PlanPrice).order_by(PlanPrice.plan_name, PlanPrice.period_days)
+        stmt = select(PlanPrice).where(PlanPrice.is_active == True).order_by(PlanPrice.plan_name, PlanPrice.period_days)
         result = await db.execute(stmt)
         prices = result.scalars().all()
 
-        # Group by plan_name
-        plan_map: dict = {}
-        for p in prices:
-            if p.plan_name not in plan_map:
-                plan_map[p.plan_name] = {
-                    "id": p.plan_name,
-                    "name": p.plan_name,
-                    "price": float(p.price_rub),
-                    "periods": [],
-                }
-            plan_map[p.plan_name]["periods"].append({
-                "days": p.period_days,
+        # Возвращаем плоский список — бот сам группирует через _group_plans_by_name
+        plans = [
+            {
+                "id": str(p.id),
+                "plan_name": p.plan_name,
+                "name": p.name or p.plan_name.capitalize(),
+                "price_rub": float(p.price_rub),
                 "price": float(p.price_rub),
-            })
-
-        plans = list(plan_map.values())
-
-        # Если планы не настроены — возвращаем пустой список (без захардкоженных дефолтов)
-        return {"plans": plans}
+                "period_days": p.period_days,
+                "duration_days": p.period_days,
+                "device_limit": p.device_limit if p.device_limit is not None else 1,
+                "devices": p.device_limit if p.device_limit is not None else 1,
+                "image_url": p.image_url or "",
+                "description": p.description or "",
+                "is_active": bool(p.is_active),
+            }
+            for p in prices
+        ]
+        return plans
     except Exception as e:
         logger.error(f"Error getting subscription plans: {e}", exc_info=True)
-        return {"plans": []}
+        return []
 
 
 @router.get("", response_model=list[SubscriptionResponse])
