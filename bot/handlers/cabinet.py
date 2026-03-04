@@ -12,7 +12,7 @@ from bot.keyboards.main_menu import get_main_menu
 from bot.keyboards.subscription_kb import get_cabinet_keyboard, get_device_keyboard, get_add_device_keyboard
 from bot.states.payment_states import DeviceStates, EmailStates
 from bot.utils.api_client import APIClient
-from bot.utils.formatters import format_subscription_info, format_device_list, get_fallback_texts
+from bot.utils.formatters import format_subscription_info, format_devices_list, get_fallback_texts
 
 
 logger = logging.getLogger(__name__)
