@@ -1,4 +1,4 @@
-"""Referral program and partner program handlers"""
+﻿"""Referral program and partner program handlers"""
 
 import logging
 import os
@@ -178,6 +178,7 @@ async def partner_handler(callback: CallbackQuery, state: FSMContext) -> None:
             withdraw_method = referral_data.get("withdraw_method") or ""
             requisites = referral_data.get("requisites") or "не указаны"
             balance = referral_data.get("partner_balance", 0) or 0
+            cover_media = await get_section_media(client, "partner_image", "partner")
 
             method_display = withdraw_method if withdraw_method else "не задан"
             req_display = requisites if requisites else "не указаны"
@@ -200,19 +201,24 @@ async def partner_handler(callback: CallbackQuery, state: FSMContext) -> None:
                 f"</blockquote>"
             )
 
-            try:
-                await callback.message.edit_text(
-                    text,
-                    parse_mode="HTML",
-                    reply_markup=_get_partner_keyboard(ref_link, withdraw_method),
-                    disable_web_page_preview=True,
-                )
-            except Exception:
-                await callback.message.answer(
-                    text,
-                    parse_mode="HTML",
-                    reply_markup=_get_partner_keyboard(ref_link, withdraw_method),
-                    disable_web_page_preview=True,
+            kb = _get_partner_keyboard(ref_link, withdraw_method)
+            if cover_media:
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass
+                try:
+                    await callback.message.answer_photo(
+                        photo=cover_media, caption=text,
+                        parse_mode="HTML", reply_markup=kb,
+                    )
+                except Exception:
+                    await callback.message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+            else:
+                try:
+                    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+                except Exception:
+                    await callback.message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
                 )
 
     except Exception as e:

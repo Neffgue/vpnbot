@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Payment flow handler — тарифы и цены загружаются из БД через API (Single Source of Truth)."""
 
 import logging
@@ -16,7 +16,7 @@ from bot.keyboards.payment_kb import (
 from bot.states.payment_states import PaymentStates
 from bot.utils.api_client import APIClient
 from bot.utils.formatters import format_payment_confirmation
-from bot.utils.media import resolve_media
+from bot.utils.media import resolve_media, get_section_media
 
 logger = logging.getLogger(__name__)
 
@@ -105,11 +105,13 @@ def _build_period_keyboard(plan_key: str, periods: dict) -> InlineKeyboardMarkup
 
 @router.callback_query(F.data == "buy_subscription")
 async def buy_subscription_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    """Показывает список тарифов: группы, доступные для выбора."""
+    """Показать список тарифных планов для выбора."""
     await callback.answer()
 
+    cover_media = None
     async with APIClient(config.api.base_url, config.api.api_key) as api:
         plans = await _fetch_plans(api)
+        cover_media = await get_section_media(api, "subscribe_image", "buy_subscription")
 
     if not plans:
         no_plans_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -142,14 +144,26 @@ async def buy_subscription_handler(callback: CallbackQuery, state: FSMContext) -
         "В каждом тарифе вы сможете выбрать удобный период подписки!"
     )
 
-    try:
-        await callback.message.edit_text(
-            plan_text, parse_mode="HTML", reply_markup=_build_plan_keyboard(grouped)
-        )
-    except Exception:
-        await callback.message.answer(
-            plan_text, parse_mode="HTML", reply_markup=_build_plan_keyboard(grouped)
-        )
+    kb = _build_plan_keyboard(grouped)
+    if cover_media:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        try:
+            await callback.message.answer_photo(
+                photo=cover_media,
+                caption=plan_text,
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+        except Exception:
+            await callback.message.answer(plan_text, parse_mode="HTML", reply_markup=kb)
+    else:
+        try:
+            await callback.message.edit_text(plan_text, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            await callback.message.answer(plan_text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("plan_"), PaymentStates.waiting_plan_selection)

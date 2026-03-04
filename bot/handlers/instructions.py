@@ -1,4 +1,4 @@
-"""Обработчик инструкций по подключению — Happ VPN"""
+﻿"""Обработчик инструкций по подключению — Happ VPN"""
 
 import logging
 from aiogram import Router, F
@@ -8,6 +8,7 @@ from aiogram.utils.media_group import MediaGroupBuilder
 
 from bot.config import config
 from bot.utils.api_client import APIClient
+from bot.utils.media import get_section_media
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -319,27 +320,42 @@ async def _send_step(callback: CallbackQuery, device: str, step_idx: int) -> Non
 
 @router.callback_query(F.data == "instructions")
 async def instructions_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    """Показывает меню выбора устройства."""
+    """Показать меню выбора устройства для инструкций."""
     await callback.answer()
-    try:
-        try:
-            await callback.message.edit_text(
-                "📖 <b>Инструкция по подключению</b>\n\n"
-                "Выберите устройство, на котором хотите подключить VPN",
-                parse_mode="HTML",
-                reply_markup=_device_keyboard(),
-            )
-        except Exception:
-            await callback.message.answer(
-                "📖 <b>Инструкция по подключению</b>\n\n"
-                "Выберите устройство, на котором хотите подключить VPN",
-                parse_mode="HTML",
-                reply_markup=_device_keyboard(),
-            )
-    except Exception as e:
-        logger.error(f"Failed to edit message in instructions handler: {e}")
-        await callback.answer("❌ Не удалось загрузить инструкции.")
 
+    instr_text = ("📱 <b>Инструкции по подключению</b>\n\n"
+                  "Выберите устройство, на котором хотите подключить VPN")
+    kb = _device_keyboard()
+    cover_media = None
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as client:
+            instr_texts = await client.get_all_bot_texts()
+            if instr_texts:
+                instr_text = instr_texts.get("instructions_text") or instr_text
+            cover_media = await get_section_media(client, "instructions_image", "instructions")
+    except Exception as e:
+        logger.warning(f"Failed to load instructions settings: {e}")
+
+    try:
+        if cover_media:
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            try:
+                await callback.message.answer_photo(
+                    photo=cover_media, caption=instr_text,
+                    parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                await callback.message.answer(instr_text, parse_mode="HTML", reply_markup=kb)
+        else:
+            try:
+                await callback.message.edit_text(instr_text, parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                await callback.message.answer(instr_text, parse_mode="HTML", reply_markup=kb)
+    except Exception as e:
+        logger.error(f"Failed in instructions handler: {e}")
+        await callback.answer("⚠️ Не удалось загрузить инструкции.")
 
 @router.callback_query(F.data == "instr_android")
 async def instr_android(callback: CallbackQuery) -> None:
