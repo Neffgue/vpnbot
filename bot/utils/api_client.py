@@ -307,6 +307,26 @@ class APIClient:
             payload["user_ids"] = user_ids
         return await self.post("/admin/broadcasts", json=payload)
     
+    async def pay_with_balance(
+        self,
+        plan_name: str,
+        period_days: int,
+        price: float,
+        device_limit: int,
+        traffic_gb: int,
+    ) -> Dict[str, Any]:
+        """Pay for subscription using account balance."""
+        return await self.post(
+            "/payments/pay-with-balance",
+            json={
+                "plan_name": plan_name,
+                "period_days": period_days,
+                "price": price,
+                "device_limit": device_limit,
+                "traffic_gb": traffic_gb,
+            },
+        )
+
     async def reissue_vpn_key(self, user_id: int) -> Dict[str, Any]:
         """Перевыпустить VPN-ключ пользователя."""
         return await self.post(f"/users/{user_id}/reissue-key")

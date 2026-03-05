@@ -174,6 +174,102 @@ async def _process_telegram_stars_payment(invoice_payload: str, payment_data: di
         await _process_payment_success(payment.provider_payment_id, {}, db)
 
 
+@router.post("/pay-with-balance")
+async def pay_with_balance(
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Pay for a subscription using the user's account balance.
+    Body: {plan_name, period_days, price, device_limit, traffic_gb}
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON body")
+
+    plan_name = body.get("plan_name")
+    period_days = int(body.get("period_days", 30))
+    price = float(body.get("price", 0))
+    device_limit = int(body.get("device_limit", 1))
+    traffic_gb = int(body.get("traffic_gb", 100))
+
+    if not plan_name or price <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="plan_name and price are required")
+
+    from decimal import Decimal
+    price_decimal = Decimal(str(price))
+
+    user_service = UserService(db)
+    payment_service = PaymentService(db)
+    sub_service = SubscriptionService(db)
+
+    try:
+        # 1. Check and deduct balance atomically
+        updated_user = await user_service.deduct_balance(current_user.id, price_decimal)
+        if updated_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Insufficient balance. Required: {price}",
+            )
+
+        # 2. Create payment record
+        payment = await payment_service.create_payment(
+            user_id=current_user.id,
+            plan_name=plan_name,
+            period_days=period_days,
+            device_limit=device_limit,
+            amount=price_decimal,
+            provider="balance",
+            provider_payment_id=f"balance_{current_user.id}_{datetime.utcnow().timestamp()}",
+        )
+        await payment_service.mark_completed(payment.id)
+
+        # 3. Create subscription
+        subscription = await sub_service.create_subscription(
+            user_id=current_user.id,
+            plan_name=plan_name,
+            period_days=period_days,
+            device_limit=device_limit,
+            traffic_gb=traffic_gb,
+        )
+
+        # 4. Handle referral bonus (same logic as webhook)
+        user = await user_service.get_user(current_user.id)
+        if user and user.referred_by:
+            from backend.services.referral_service import ReferralService
+            referral_service = ReferralService(db)
+            referral = await referral_service.get_pending_referral(current_user.id)
+            if referral and not referral.paid_at:
+                await referral_service.mark_referral_paid(referral.id)
+                referrer_sub = await sub_service.get_active_user_subscription(referral.referrer_id)
+                if referrer_sub:
+                    await sub_service.extend_subscription(referrer_sub.id, referral.bonus_days)
+
+        link = getattr(subscription, "link", None) or getattr(subscription, "subscription_link", None) or ""
+        xui_uuid = getattr(subscription, "xui_client_uuid", None) or ""
+
+        return {
+            "subscription_id": subscription.id,
+            "xui_client_uuid": xui_uuid,
+            "link": link,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"pay_with_balance error for user {current_user.id}: {e}", exc_info=True)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Payment processing failed",
+        )
+
+
 def _verify_yookassa_signature(request: Request) -> bool:
     """Verify YooKassa webhook signature via IP allowlist.
     YooKassa sends webhooks from fixed IPs — we check against their known range.

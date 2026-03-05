@@ -52,19 +52,33 @@ def get_period_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def get_payment_method_keyboard() -> InlineKeyboardMarkup:
+def get_payment_method_keyboard(balance: float = 0, price: float = 0) -> InlineKeyboardMarkup:
     """Клавиатура выбора метода оплаты."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="pay_stars"),
-                InlineKeyboardButton(text="💳 YooKassa (Карта/СБП)", callback_data="pay_yookassa"),
-            ],
-            [
-                InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_payment"),
-            ],
-        ]
-    )
+    rows = [
+        [
+            InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="pay_stars"),
+            InlineKeyboardButton(text="💳 YooKassa (Карта/СБП)", callback_data="pay_yookassa"),
+        ],
+    ]
+    if price > 0:
+        if balance >= price:
+            rows.append([
+                InlineKeyboardButton(
+                    text=f"💰 Оплатить с баланса ({balance:.0f} ₽)",
+                    callback_data="pay_balance",
+                )
+            ])
+        else:
+            rows.append([
+                InlineKeyboardButton(
+                    text=f"💰 Баланс ({balance:.0f} ₽) — недостаточно средств",
+                    callback_data="balance_insufficient",
+                )
+            ])
+    rows.append([
+        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_payment"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_payment_confirmation_keyboard(price: float) -> InlineKeyboardMarkup:

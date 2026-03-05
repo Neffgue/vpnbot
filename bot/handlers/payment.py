@@ -251,6 +251,15 @@ async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
         currency="RUB",
     )
 
+    # Получаем баланс пользователя для кнопки оплаты балансом
+    balance = 0.0
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as api:
+            user_data = await api.get_user(callback.from_user.id)
+            balance = float(user_data.get("balance", 0) or 0)
+    except Exception as e:
+        logger.warning(f"Failed to fetch user balance: {e}")
+
     # Показываем картинку тарифа при подтверждении, если есть
     image_url = plan_info.get("image_url", "")
     cover = resolve_media(image_url) if image_url else None
@@ -266,7 +275,7 @@ async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
                 photo=cover,
                 caption=confirmation_text,
                 parse_mode="HTML",
-                reply_markup=get_payment_method_keyboard(),
+                reply_markup=get_payment_method_keyboard(balance=balance, price=price),
             )
             return
         except Exception as e:
@@ -276,13 +285,13 @@ async def select_period(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.edit_text(
             confirmation_text,
             parse_mode="HTML",
-            reply_markup=get_payment_method_keyboard(),
+            reply_markup=get_payment_method_keyboard(balance=balance, price=price),
         )
     except Exception:
         await callback.message.answer(
             confirmation_text,
             parse_mode="HTML",
-            reply_markup=get_payment_method_keyboard(),
+            reply_markup=get_payment_method_keyboard(balance=balance, price=price),
         )
 
 
@@ -408,6 +417,15 @@ async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) ->
         currency="RUB",
     )
 
+    # Получаем баланс пользователя для кнопки оплаты балансом
+    balance = 0.0
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as api:
+            user_data = await api.get_user(callback.from_user.id)
+            balance = float(user_data.get("balance", 0) or 0)
+    except Exception as e:
+        logger.warning(f"Failed to fetch user balance: {e}")
+
     # Показываем картинку тарифа если есть
     image_url = plan_info.get("image_url", "")
     cover = resolve_media(image_url) if image_url else None
@@ -423,7 +441,7 @@ async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) ->
                 photo=cover,
                 caption=confirmation_text,
                 parse_mode="HTML",
-                reply_markup=get_payment_method_keyboard(),
+                reply_markup=get_payment_method_keyboard(balance=balance, price=price),
             )
             await state.set_state(PaymentStates.waiting_payment_method)
             return
@@ -434,12 +452,100 @@ async def confirm_payment_handler(callback: CallbackQuery, state: FSMContext) ->
         await callback.message.edit_text(
             confirmation_text,
             parse_mode="HTML",
-            reply_markup=get_payment_method_keyboard(),
+            reply_markup=get_payment_method_keyboard(balance=balance, price=price),
         )
     except Exception:
         await callback.message.answer(
             confirmation_text,
             parse_mode="HTML",
-            reply_markup=get_payment_method_keyboard(),
+            reply_markup=get_payment_method_keyboard(balance=balance, price=price),
         )
     await state.set_state(PaymentStates.waiting_payment_method)
+
+
+@router.callback_query(F.data == "balance_insufficient", PaymentStates.waiting_payment_method)
+async def balance_insufficient_handler(callback: CallbackQuery, state: FSMContext) -> None:
+    """Уведомление о недостатке средств при нажатии на серую кнопку баланса."""
+    data = await state.get_data()
+    price = float(data.get("price", 0))
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as api:
+            user_data = await api.get_user(callback.from_user.id)
+            balance = float(user_data.get("balance", 0) or 0)
+    except Exception:
+        balance = 0.0
+    await callback.answer(
+        f"❌ Недостаточно средств. Баланс: {balance:.0f} ₽, нужно: {price:.0f} ₽",
+        show_alert=True,
+    )
+
+
+@router.callback_query(F.data == "pay_balance", PaymentStates.waiting_payment_method)
+async def pay_with_balance_handler(callback: CallbackQuery, state: FSMContext) -> None:
+    """Оплата подписки с баланса пользователя."""
+    await callback.answer()
+
+    data = await state.get_data()
+    plan_info = data.get("selected_plan_info", {})
+    period_days = int(data.get("period_days", 30))
+    price = float(data.get("price", 0))
+
+    plan_name = plan_info.get("key", plan_info.get("name", "solo"))
+    device_limit = int(plan_info.get("devices", 1))
+    traffic_gb = int(plan_info.get("traffic_gb", 100))
+
+    # Проверяем баланс перед отправкой запроса
+    try:
+        async with APIClient(config.api.base_url, config.api.api_key) as api:
+            user_data = await api.get_user(callback.from_user.id)
+            balance = float(user_data.get("balance", 0) or 0)
+
+            if balance < price:
+                await callback.message.answer(
+                    f"❌ Недостаточно средств на балансе.\n"
+                    f"Ваш баланс: <b>{balance:.0f} ₽</b>, необходимо: <b>{price:.0f} ₽</b>",
+                    parse_mode="HTML",
+                    reply_markup=get_payment_method_keyboard(balance=balance, price=price),
+                )
+                return
+
+            result = await api.pay_with_balance(
+                plan_name=plan_name,
+                period_days=period_days,
+                price=price,
+                device_limit=device_limit,
+                traffic_gb=traffic_gb,
+            )
+
+    except Exception as e:
+        logger.error(f"pay_with_balance error: {e}")
+        await callback.message.answer(
+            "❌ Ошибка при оплате с баланса. Попробуйте позже или выберите другой способ оплаты."
+        )
+        return
+
+    link = result.get("link") or result.get("subscription_link") or result.get("xui_client_uuid", "")
+
+    period_label = PERIOD_LABELS.get(period_days, f"{period_days} дней")
+    success_text = (
+        f"✅ <b>Оплата прошла успешно!</b>\n\n"
+        f"Тариф: <b>{plan_info.get('name', 'VPN')}</b>\n"
+        f"Период: <b>{period_label}</b>\n"
+        f"Списано: <b>{price:.0f} ₽</b>\n\n"
+        f"🔑 Ваша ссылка подписки готова!"
+    )
+
+    await state.clear()
+
+    try:
+        await callback.message.edit_text(
+            success_text,
+            parse_mode="HTML",
+            reply_markup=get_subscription_link_keyboard(link),
+        )
+    except Exception:
+        await callback.message.answer(
+            success_text,
+            parse_mode="HTML",
+            reply_markup=get_subscription_link_keyboard(link),
+        )
